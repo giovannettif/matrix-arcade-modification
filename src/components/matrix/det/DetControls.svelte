@@ -8,6 +8,7 @@
 		detValue,
 		detSpeed,
 		detGame,
+		detResetTick,
 		setDetTarget,
 		playDet,
 		pauseDet,
@@ -30,6 +31,15 @@
 		vals = [...$detTarget];
 		lastSent = JSON.stringify(vals);
 	}
+
+	// Resets (identity snap on chapter entry) must always reach the spinners,
+	// even while interactive — otherwise the dock shows a stale matrix.
+	$: if ($detResetTick !== seenTick) {
+		seenTick = $detResetTick;
+		vals = [...$detTarget];
+		lastSent = JSON.stringify(vals);
+	}
+	let seenTick = 0;
 
 	// User edits morph the shape live (only while no round is live).
 	$: if (interactive && !roundLive && JSON.stringify(vals) !== lastSent) {

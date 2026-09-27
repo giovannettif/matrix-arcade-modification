@@ -16,6 +16,7 @@ export const detPlayhead = writable(1); // 1 = resting at target
 export const detPlaying = writable(false);
 export const detSpeed = writable(1);
 export const detTourStep = writable(-1); // guided tour (V2): -1 = inactive
+export const detResetTick = writable(0); // bumped whenever entries snap (reset)
 
 export const detEntries = derived(
 	[detFrom, detTarget, detPlayhead],
@@ -98,6 +99,7 @@ export function resetToIdentity() {
 	detTarget.set([...IDENTITY]);
 	detPlayhead.set(1);
 	detPlaying.set(false);
+	detResetTick.update((n) => n + 1);
 }
 
 /* ------------------------------------------------------------------ */

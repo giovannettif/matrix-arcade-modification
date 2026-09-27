@@ -59,7 +59,9 @@
 			// demo: collapse the plane (det = 0)
 			setDetTarget([1, 2, 2, 4], { duration: 2.6 });
 		} else if (ch === 3) {
-			// free play — controls unlock; first visit starts the guided tour
+			// free play — start from a clean identity square so the "find a matrix
+			// that collapses the plane" challenge is open (controls unlock)
+			resetToIdentity();
 			if (!tourDone) {
 				tourDone = true;
 				detTourStep.set(0);
