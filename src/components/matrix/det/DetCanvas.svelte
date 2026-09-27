@@ -3,7 +3,7 @@
 		detEntries,
 		detValue,
 		detArea,
-		detChapter,
+		detStep,
 		detPlayhead,
 		detCollapsed,
 		detFlipped,
@@ -62,7 +62,7 @@
 		images[0][0] - images[1][0],
 		images[0][1] - images[1][1]
 	);
-	$: showCallout = $detChapter === 2 && $detPlayhead > 0.7 && $detCollapsed;
+	$: showCallout = $detStep >= 4 && $detStep <= 5 && $detPlayhead > 0.7 && $detCollapsed;
 	$: shapeFill = $detCollapsed
 		? "transparent"
 		: $detFlipped
@@ -102,7 +102,11 @@
 		viewBox="0 0 {W} {H}"
 		preserveAspectRatio="xMidYMid meet"
 		class:asking
+		role="img"
+		aria-label="Interactive determinant canvas"
 		on:click={onCanvasClick}
+		on:keydown={(e) => e.key === "Enter" && onCanvasClick(e)}
+		tabindex="-1"
 		style:cursor={asking ? "crosshair" : "default"}
 	>
 		{#each gridLines as g (g)}
@@ -160,19 +164,27 @@
 			style="filter: drop-shadow(0 0 6px {COL_B})"
 		/>
 
-		<!-- sample points: originals + their images -->
-		{#each samples as s, i (i)}
-			<circle cx={px(s.p[0])} cy={py(s.p[1])} r="5" fill={s.c} opacity="0.85" />
-			<circle
-				cx={px(images[i][0])}
-				cy={py(images[i][1])}
-				r="6"
-				fill={s.c}
-				stroke="#0b0b14"
-				stroke-width="1.5"
-				style="filter: drop-shadow(0 0 5px {s.c})"
-			/>
-		{/each}
+		<!-- sample points: originals + their images (collapse story, steps 4-5 only) -->
+		{#if $detStep >= 4 && $detStep <= 5}
+			{#each samples as s, i (i)}
+				<circle cx={px(s.p[0])} cy={py(s.p[1])} r="5" fill={s.c} opacity="0.85" />
+				<circle
+					cx={px(images[i][0])}
+					cy={py(images[i][1])}
+					r="6"
+					fill={s.c}
+					stroke="#0b0b14"
+					stroke-width="1.5"
+					style="filter: drop-shadow(0 0 5px {s.c})"
+				/>
+			{/each}
+		{/if}
+
+		<!-- column labels (steps 2+) -->
+		{#if $detStep >= 2}
+			<text class="vec-label" x={px(col1[0]) + (col1[0] >= 0 ? 14 : -14)} y={py(col1[1]) - 10} text-anchor={col1[0] >= 0 ? "start" : "end"} fill={COL_A}>T(e₁)</text>
+			<text class="vec-label" x={px(col2[0]) + (col2[0] >= 0 ? 14 : -14)} y={py(col2[1]) + 20} text-anchor={col2[0] >= 0 ? "start" : "end"} fill={COL_B}>T(e₂)</text>
+		{/if}
 
 		<!-- prediction-game markers (on top) -->
 		{#if gRound}
@@ -260,13 +272,20 @@
 	</svg>
 
 	<!-- HTML overlays -->
+	{#if $detStep >= 2}
+		<div class="det-chip" style:border-color={$detCollapsed ? PURPLE : $detFlipped ? PINK : "rgba(139,233,253,0.6)"} style:color={$detCollapsed ? PURPLE : $detFlipped ? PINK : "#8be9fd"}>
+			det(A) = {$detCollapsed ? "0.0" : $detValue.toFixed(1)}
+			<span class="det-chip-sub">{Math.abs($detValue) < 0.05 ? "plane collapsed" : `area × ${$detArea.toFixed(1)}`}{Math.abs($detValue) >= 0.05 && $detFlipped ? " · reversed" : ""}</span>
+		</div>
+	{/if}
+
 	{#if !$detCollapsed}
 		<div class="area-label" style:left="{areaLabelPos.x}%" style:top="{areaLabelPos.y}%">
 			area = {$detArea.toFixed(1)}
 		</div>
 	{/if}
 
-	{#if $detFlipped}
+	{#if $detStep === 3 && $detFlipped}
 		<div class="flip-badge">↺ orientation reversed</div>
 	{/if}
 
@@ -321,6 +340,18 @@
 		stroke-linejoin: round;
 		transition: fill 0.4s, stroke 0.4s;
 		filter: drop-shadow(0 0 10px rgba(4, 212, 240, 0.35));
+	}
+	.det-chip {
+		@apply absolute bottom-3 left-3 rounded-md border bg-[rgba(13,13,22,0.85)] px-2.5 py-1 font-serif text-sm;
+		transition: border-color 0.3s, color 0.3s;
+	}
+	.det-chip-sub {
+		@apply ml-2 font-sans text-[10px] text-[#8b90a7];
+	}
+	.vec-label {
+		font-family: "Old Standard TT", serif;
+		font-style: italic;
+		font-size: 17px;
 	}
 	.pulse {
 		animation: detpulse 1.4s ease-in-out infinite;

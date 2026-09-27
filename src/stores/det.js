@@ -9,13 +9,14 @@ import { gsap } from "$utils/gsap.js";
 
 const IDENTITY = [1, 0, 0, 1];
 
-export const detChapter = writable(1); // 1..4, driven by scroll
+export const detStep = writable(1); // 1..4, driven by scroll
 export const detFrom = writable([...IDENTITY]);
 export const detTarget = writable([...IDENTITY]);
 export const detPlayhead = writable(1); // 1 = resting at target
 export const detPlaying = writable(false);
 export const detSpeed = writable(1);
-export const detTourStep = writable(-1); // guided tour (V2): -1 = inactive
+export const detGuideStep = writable(0); // guided walkthrough beat (0..3)
+export const detGuideCollapsed = writable(false);
 export const detResetTick = writable(0); // bumped whenever entries snap (reset)
 
 export const detEntries = derived(

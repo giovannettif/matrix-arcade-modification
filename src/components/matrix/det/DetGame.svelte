@@ -2,12 +2,12 @@
 	import { Gamepad2, MousePointerClick, ArrowRight, RotateCcw, X } from "lucide-svelte";
 	import {
 		detGame,
-		detChapter,
+		detStep,
 		startRound,
 		endRound
 	} from "$stores/det.js";
 
-	$: active = $detChapter === 3;
+	$: active = $detStep === 6;
 	$: g = $detGame;
 
 	$: question =

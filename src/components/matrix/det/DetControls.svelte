@@ -3,7 +3,7 @@
 	import { Play, Pause, SkipForward } from "lucide-svelte";
 	import {
 		detTarget,
-		detChapter,
+		detStep,
 		detPlaying,
 		detValue,
 		detSpeed,
@@ -23,11 +23,11 @@
 	let vals = [...$detTarget];
 	let lastSent = JSON.stringify(vals);
 
-	$: interactive = $detChapter === 3;
+	$: interactive = $detStep === 6;
 	$: roundLive = $detGame.status === "asking";
 
 	// Keep the spinners in sync when chapter scripts or game rounds set the target.
-	$: if (!$detChapter || !interactive || roundLive) {
+	$: if (!$detStep || !interactive || roundLive) {
 		vals = [...$detTarget];
 		lastSent = JSON.stringify(vals);
 	}
