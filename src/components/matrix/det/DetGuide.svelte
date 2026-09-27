@@ -88,7 +88,7 @@
 
 <style lang="postcss">
 	.guide {
-		@apply rounded-xl border border-[#50fa7b40] bg-[#0d0d18]/95 p-3.5;
+		@apply rounded-xl border border-[#50fa7b40] bg-[rgba(13,13,24,0.92)] p-3.5 shadow-[0_0_24px_rgba(0,0,0,0.5)];
 	}
 	.guide.collapsed {
 		@apply py-2;

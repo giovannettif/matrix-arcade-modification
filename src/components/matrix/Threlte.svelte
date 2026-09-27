@@ -1,6 +1,7 @@
 <script>
 	import { Canvas } from '@threlte/core';
 	import Scene from './Scene.svelte';
+	import DetScene from './det/DetScene.svelte';
   import * as THREE from 'three';
 
   // Make the z-axis the "up/down" axis
@@ -9,4 +10,6 @@
 
 <Canvas colorManagementEnabled={true} rendererParameters={{ webgl1: true, logarithmicDepthBuffer: false }}>
 	<Scene />
+	<!-- CS375: determinant shapes on the same grid -->
+	<DetScene />
 </Canvas>

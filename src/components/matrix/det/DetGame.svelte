@@ -3,6 +3,7 @@
 	import {
 		detGame,
 		detStep,
+		detGuideStep,
 		startRound,
 		endRound
 	} from "$stores/det.js";
@@ -25,11 +26,11 @@
 		<div class="head">
 			<span class="title"><Gamepad2 size={16} /> Your turn</span>
 			{#if g.status === "idle"}
-				<div class="modes">
+				<div class="modes" class:guide-hl={$detGuideStep === 2}>
 					<button class="mode" on:click={() => startRound("forward")}>
 						<MousePointerClick size={15} /> Predict the image
 					</button>
-					<button class="mode" on:click={() => startRound("inverse")}>
+					<button class="mode" class:guide-hl={$detGuideStep === 3} on:click={() => startRound("inverse")}>
 						<RotateCcw size={15} /> Predict the origin
 					</button>
 				</div>
@@ -92,7 +93,7 @@
 
 <style lang="postcss">
 	.game {
-		@apply mt-3 rounded-xl border border-[#44475a66] bg-[#0d0d18]/95 p-4;
+		@apply mt-3;
 	}
 	.head {
 		@apply flex flex-wrap items-center justify-between gap-2;
@@ -112,6 +113,21 @@
 	.mode:hover {
 		background: rgba(80, 250, 123, 0.16);
 		box-shadow: 0 0 16px rgba(80, 250, 123, 0.35);
+	}
+	:global(.guide-hl) {
+		outline: 2px solid #50fa7b !important;
+		outline-offset: 4px;
+		border-radius: 10px;
+		animation: guidepulse 1.2s ease-in-out infinite;
+	}
+	@keyframes guidepulse {
+		0%,
+		100% {
+			box-shadow: 0 0 0 rgba(80, 250, 123, 0);
+		}
+		50% {
+			box-shadow: 0 0 18px rgba(80, 250, 123, 0.55);
+		}
 	}
 	.quit {
 		@apply flex items-center gap-1 rounded-lg border border-[#44475a] px-2 py-1 font-sans text-xs text-[#8b90a7];

@@ -15,7 +15,7 @@
 	import Action from "./Action.svelte";
 	import Section from "./Section.svelte";
 	import B from "./B.svelte";
-	import { Grab } from "lucide-svelte";
+	import { Grab, Crosshair } from "lucide-svelte";
 	import ActionIcon from "./ActionIcon.svelte";
 	import InteractionsList from "./InteractionsList.svelte";
 	import { gsap, ScrollTrigger } from "$utils/gsap.js";
@@ -313,8 +313,78 @@
 		</div>
 	</Section>
 
-	<!-- CS375 modification: the determinant/area/invertibility section is mounted
-		from Index.svelte (outside this pinned article) — see documentation/PLAN.md -->
+	<!-- CS375 modification: the determinant story — see documentation/PLAN.md -->
+	<Section id="section-det" classNames="animate">
+		<h2 class="text-neutral">The Determinant: Area and Invertibility</h2>
+
+		<p>
+			Every matrix so far <B>moved vectors around</B>. But a transformation does something
+			else, quietly, to the entire plane: it <B>rescales every area</B> by the same amount.
+			That amount has a name — the <Term>determinant</Term> — and it decides whether the
+			transformation can be undone at all.
+		</p>
+
+		<div class="h-[450px]" />
+
+		<P id="det-st-1">
+			Here is the <B>unit square</B> — the corner spanned by the two basis vectors. Its area
+			is exactly <Tex expr="1" />. Every matrix transforms it into a parallelogram, and the
+			<Term>determinant</Term> measures what happens to that area.
+		</P>
+
+		<div class="h-[450px]" />
+
+		<P id="det-st-2">
+			Watch: this matrix stretches the square's area to <B>exactly double</B>. That factor is
+			the determinant — <Tex expr={"\\det(A) = 2"} /> — and it doesn't just apply to the
+			square: <B>every shape's area scales by the same amount</B>.
+		</P>
+
+		<div class="h-[450px]" />
+
+		<P id="det-st-3">
+			The sign matters too. A <B>negative determinant</B> flips the plane over — the area is
+			still scaled by the same factor, but the <B>orientation reverses</B>: clockwise becomes
+			counterclockwise.
+		</P>
+
+		<div class="h-[450px]" />
+
+		<P id="det-st-4">
+			And when <Tex expr={"\\det(A) = 0"} />? The entire plane is <B
+				>squashed onto a single line</B
+			>. Every square becomes a segment; every area becomes zero. Watch the two marked
+			points: different inputs, <B>same output</B>.
+		</P>
+
+		<div class="h-[450px]" />
+
+		<P id="det-st-5">
+			That is why collapsed matrices have no inverse: the transformation <B
+				>throws information away</B
+			>, so there is nothing left to undo. <Term>No determinant, no inverse</Term>.
+		</P>
+
+		<div class="h-[450px]" />
+
+		<div class="exclude">
+			<p id="det-st-6">
+				Now <B>make the plane misbehave yourself</B> — the controls are on the left. Try to
+				find a matrix that collapses the plane, then take the prediction challenges: the
+				origin round is <B>impossible</B> when det(A) = 0.
+			</p>
+			<Action>
+				<ul class="list-none">
+					<InteractionsList />
+					<li>
+						<ActionIcon icon={Crosshair} />
+						<B>Predict</B> — use the round buttons on the left panel, then click the canvas
+						where you think the answer is
+					</li>
+				</ul>
+			</Action>
+		</div>
+	</Section>
 
 	<!-- TODO: Composition of matrices -->
 </div>

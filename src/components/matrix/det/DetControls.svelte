@@ -6,8 +6,12 @@
 		detStep,
 		detPlaying,
 		detValue,
+		detArea,
+		detCollapsed,
+		detFlipped,
 		detSpeed,
 		detGame,
+		detGuideStep,
 		detResetTick,
 		setDetTarget,
 		playDet,
@@ -15,10 +19,9 @@
 		skipDet,
 		setDetSpeed
 	} from "$stores/det.js";
-	import DetChip from "./DetChip.svelte";
 
-	const COL_A = "#ffb86c";
-	const COL_B = "#50fa7b";
+	const COL_A = "#ff79c6";
+	const COL_B = "#bd93f9";
 
 	let vals = [...$detTarget];
 	let lastSent = JSON.stringify(vals);
@@ -26,14 +29,13 @@
 	$: interactive = $detStep === 6;
 	$: roundLive = $detGame.status === "asking";
 
-	// Keep the spinners in sync when chapter scripts or game rounds set the target.
+	// Keep the spinners in sync when the story or a game round sets the matrix.
 	$: if (!$detStep || !interactive || roundLive) {
 		vals = [...$detTarget];
 		lastSent = JSON.stringify(vals);
 	}
 
-	// Resets (identity snap on chapter entry) must always reach the spinners,
-	// even while interactive — otherwise the dock shows a stale matrix.
+	// Resets (identity snap on chapter entry) must always reach the spinners.
 	$: if ($detResetTick !== seenTick) {
 		seenTick = $detResetTick;
 		vals = [...$detTarget];
@@ -48,17 +50,24 @@
 	}
 </script>
 
-<div class="dock {interactive ? '' : 'locked'}">
+<div class="det-controls">
 	<div class="title">Transform the unit square</div>
-	<div class="hint">
-		{roundLive
-			? "Matrix locked while the round is live — it resets after the round."
-			: "See how a 2 × 2 matrix moves the basis vectors and changes area."}
+
+	<!-- live readouts (beat 1 of the guide points here) -->
+	<div class="readouts" class:guide-hl={$detGuideStep === 1}>
+		<span style:color={$detCollapsed ? "#bd93f9" : $detFlipped ? "#ff79c6" : "#8be9fd"}>
+			det(A) = {$detCollapsed ? "0.0" : $detValue.toFixed(1)}
+		</span>
+		<span class="readout-sub">
+			{$detCollapsed
+				? "the plane is squashed onto one line"
+				: `area × ${$detArea.toFixed(1)}${$detFlipped ? " · orientation reversed" : ""}`}
+		</span>
 	</div>
 
 	<div class="flex flex-wrap items-center gap-4">
-		<!-- Matrix entry grid -->
-		<div class="matrix-grid" class:frozen={roundLive}>
+		<!-- Matrix entry grid (beat 0 of the guide points here) -->
+		<div class="matrix-grid" class:frozen={roundLive} class:guide-hl={$detGuideStep === 0}>
 			<div>
 				<NumberSpinner bind:value={vals[0]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
 			</div>
@@ -72,8 +81,6 @@
 				<NumberSpinner bind:value={vals[3]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_B};`} />
 			</div>
 		</div>
-
-		<DetChip value={$detValue} size="sm" />
 
 		<!-- Playback -->
 		<div class="flex items-center gap-2">
@@ -102,25 +109,30 @@
 			/>
 		</label>
 	</div>
+
+	{#if roundLive}
+		<div class="hint">Matrix locked while the round is live — it resets after the round.</div>
+	{/if}
 </div>
 
 <style lang="postcss">
-	.dock {
-		@apply rounded-xl border border-[#44475a66] bg-[#0d0d18]/95 p-4;
-		transition: opacity 0.4s;
-	}
-	.dock.locked {
-		@apply pointer-events-none opacity-[0.35];
+	.det-controls {
+		@apply flex flex-col items-start gap-3;
 	}
 	.title {
 		@apply font-serif text-xl font-bold text-base-content;
 	}
-	.hint {
-		@apply mb-3 font-sans text-xs text-[#8b90a7];
+	.readouts {
+		@apply flex flex-col rounded-md border border-[#44475a66] bg-[#0d0d18]/80 px-3 py-1.5 font-serif text-lg;
+		transition: border-color 0.3s;
+	}
+	.readout-sub {
+		@apply font-sans text-[11px] text-[#8b90a7];
 	}
 	.matrix-grid {
 		@apply grid grid-cols-2 grid-rows-2 px-3 py-1;
 		box-shadow: inset 0 0 0 3px rgba(248, 248, 242, 0.85);
+		transition: opacity 0.3s;
 	}
 	.matrix-grid.frozen {
 		@apply pointer-events-none opacity-70;
@@ -150,5 +162,25 @@
 		@apply h-4 w-4 appearance-none rounded-full;
 		background: #f8f8f2;
 		box-shadow: 0 0 8px rgba(248, 248, 242, 0.6);
+	}
+	.hint {
+		@apply font-sans text-[11px] text-[#8b90a7];
+	}
+
+	/* guide highlight rings (the tour points at each piece) */
+	:global(.guide-hl) {
+		outline: 2px solid #50fa7b !important;
+		outline-offset: 4px;
+		border-radius: 10px;
+		animation: guidepulse 1.2s ease-in-out infinite;
+	}
+	@keyframes guidepulse {
+		0%,
+		100% {
+			box-shadow: 0 0 0 rgba(80, 250, 123, 0);
+		}
+		50% {
+			box-shadow: 0 0 18px rgba(80, 250, 123, 0.55);
+		}
 	}
 </style>
