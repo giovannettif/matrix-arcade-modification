@@ -389,5 +389,9 @@
 		</div>
 	</Section>
 
+	<!-- tail runway: guarantees det-st-6 (the try-it step) can reach the viewport
+	     center at max scroll even when the pin-spacer calibration runs short -->
+	<div class="h-[700px]" />
+
 	<!-- TODO: Composition of matrices -->
 </div>

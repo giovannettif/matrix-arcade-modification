@@ -89,7 +89,7 @@
 			arrowTop = Math.min(Math.max(centerY - top, 18), cardH - 18);
 			moveTo(left, top);
 		} catch (e) {
-			window.__tourPlace = { error: String(e && e.message || e) };
+			// placement is best-effort; a failed beat keeps the last position
 		}
 	}
 

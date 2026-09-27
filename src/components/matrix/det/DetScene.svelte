@@ -124,11 +124,47 @@
 	$: gAnswer = g.result && g.result.answer ? g.result.answer : null;
 	$: gPreimages = g.result && g.result.preimages ? g.result.preimages : null;
 
-	function guessFromEvent(e) {
-		const p = e.detail && e.detail.intersection ? e.detail.intersection.point : null;
-		if (!p) return;
-		if (get(detGame).status === "asking") {
-			submitGuess([p.x, p.y]);
+	// click-to-guess: a manual DOM-raycast path rather than Threlte's
+	// on:pointerdown — the app never registered the interactivity plugin, and
+	// its default target (renderer.domElement at plugin-creation time) is not
+	// dependable when called from a child component. clientX/Y + the live
+	// camera make this work for real clicks and automation alike.
+	let clickPlane;
+	const guessRaycaster = new THREE.Raycaster();
+	const guessNdc = new THREE.Vector2();
+	// the det story lives on the z = 0.05 plane within |x|,|y| <= ~4 (grid span)
+	const STORY_Z = 0.05;
+	const STORY_SPAN = 4.2;
+	function onCanvasPointerDown(e) {
+		if (get(detGame).status !== "asking") return;
+		const canvas = e.currentTarget;
+		const r = canvas.getBoundingClientRect();
+		guessNdc.set(
+			((e.clientX - r.left) / r.width) * 2 - 1,
+			-(((e.clientY - r.top) / r.height) * 2 - 1)
+		);
+		const cc = get(cameraControls);
+		if (!cc || !cc.camera) return;
+		guessRaycaster.setFromCamera(guessNdc, cc.camera);
+		// mesh raycast first (exact when the plane's world matrix is current)
+		if (clickPlane) {
+			const hits = guessRaycaster.intersectObject(clickPlane, true);
+			if (hits.length) {
+				submitGuess([hits[0].point.x, hits[0].point.y]);
+				return;
+			}
+		}
+		// analytic ray ∩ story-plane fallback — independent of scene-graph
+		// matrix staleness, which matters when the render loop is throttled
+		const o = guessRaycaster.ray.origin;
+		const d = guessRaycaster.ray.direction;
+		if (Math.abs(d.z) < 1e-6) return;
+		const t = (STORY_Z - o.z) / d.z;
+		if (t <= 0) return;
+		const px = o.x + t * d.x;
+		const py = o.y + t * d.y;
+		if (Math.abs(px) <= STORY_SPAN && Math.abs(py) <= STORY_SPAN) {
+			submitGuess([px, py]);
 		}
 	}
 
@@ -315,11 +351,14 @@
 		mounted = true;
 		window.addEventListener("scroll", detUpdate, { passive: true });
 		window.addEventListener("resize", detUpdate);
+		const canvasEl = document.querySelector("#canvas-wrapper canvas");
+		if (canvasEl) canvasEl.addEventListener("pointerdown", onCanvasPointerDown);
 		const iv = setInterval(detUpdate, 300);
 		detUpdate();
 		onDestroy(() => {
 			window.removeEventListener("scroll", detUpdate);
 			window.removeEventListener("resize", detUpdate);
+			if (canvasEl) canvasEl.removeEventListener("pointerdown", onCanvasPointerDown);
 			clearInterval(iv);
 		});
 	});
@@ -417,9 +456,9 @@
 
 	<!-- click plane for the prediction games (asking rounds only) -->
 	{#if gAsk}
-		<T is={THREE.Mesh} on:pointerdown={guessFromEvent}>
-			<planeGeometry args={[8, 8]} />
-			<meshBasicMaterial transparent opacity={0} depthWrite={false} />
+		<T is={THREE.Mesh} bind:ref={clickPlane}>
+			<planeGeometry args={[8.4, 8.4]} />
+			<meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
 		</T>
 	{/if}
 {/if}
