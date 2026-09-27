@@ -10,6 +10,7 @@
 	import { loaded } from "$stores";
 	import { gsap, ScrollTrigger } from "$utils/gsap.js";
 	import Footer from "./matrix/Footer.svelte";
+	import DetSection from "./matrix/det/DetSection.svelte";
 	import mq from "$stores/mq.js";
 	import { RingLoader } from "svelte-loading-spinners";
 	import { colorVector } from "$data/variables";
@@ -58,6 +59,9 @@
 
 	<Article />
 </article>
+
+<!-- CS375 modification: determinant, area & invertibility section -->
+<DetSection />
 <!-- {/if} -->
 
 {#if $showPlayground}

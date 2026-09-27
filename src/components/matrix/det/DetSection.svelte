@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
+	import { gsap } from "$utils/gsap.js";
 	import {
 		detChapter,
 		detEntries,
@@ -24,14 +25,15 @@
 	];
 
 	let wrapper;
-	let timers = [];
+	let calls = [];
 	let active = false;
+	let lastEnter = 0;
 
 	$: m = $detEntries;
 
 	function clearTimers() {
-		timers.forEach(clearTimeout);
-		timers = [];
+		calls.forEach((c) => c.kill());
+		calls = [];
 	}
 
 	function enterChapter(ch) {
@@ -39,13 +41,14 @@
 		if (ch === 1) {
 			resetToIdentity();
 			// demo: stretch (det = 2), then flip orientation (det = -2)
-			timers.push(
-				setTimeout(() => {
+			// gsap.delayedCall keeps the whole demo on the gsap clock
+			calls.push(
+				gsap.delayedCall(0.9, () => {
 					if (get(detChapter) === 1) setDetTarget([2, 1, 0, 1]);
-				}, 900),
-				setTimeout(() => {
+				}),
+				gsap.delayedCall(4.4, () => {
 					if (get(detChapter) === 1) setDetTarget([-2, 1, 0, 1]);
-				}, 4400)
+				})
 			);
 		} else if (ch === 2) {
 			// demo: collapse the plane (det = 0)
@@ -76,11 +79,13 @@
 		enterChapter(1);
 
 		// Re-run the chapter-1 demo whenever the section re-enters the viewport,
-		// so late arrivals still see the animation from the start.
+		// so late arrivals still see the animation from the start (with a cooldown
+		// so IO bounce at the boundary doesn't restart the demo mid-play).
 		const io = new IntersectionObserver(
 			(entries) => {
 				if (entries[0].isIntersecting) {
-					if (!active) {
+					if (!active && Date.now() - lastEnter > 800) {
+						lastEnter = Date.now();
 						active = true;
 						enterChapter(get(detChapter));
 					}
@@ -105,9 +110,10 @@
 </script>
 
 <div id="det-section" bind:this={wrapper} class="relative h-[520vh]">
-	<!-- The stage is fixed to the viewport: the surrounding article column is
-	     intentionally full-bleed in this design, so centering must not depend on it. -->
-	<div class="stage-hold" class:on={active}>
+	<!-- Sibling of the pinned article (mounted from Index.svelte): no transformed
+	     ancestors here, so the stage can stick to the viewport and center normally. -->
+	<div class="sticky top-0 flex h-screen w-full items-center justify-center">
+		<div class="stage-hold" class:on={active}>
 		<div class="stage">
 			<div class="stage-head">
 				<h2>Determinant, Area, and Invertibility</h2>
@@ -222,7 +228,8 @@
 								</div>
 							</li>
 						{/each}
-					</ol>
+						</ol>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -231,8 +238,7 @@
 
 <style lang="postcss">
 	.stage-hold {
-		@apply pointer-events-none fixed left-1/2 top-1/2 z-30;
-		transform: translate(-50%, -50%);
+		@apply pointer-events-none;
 		opacity: 0;
 		visibility: hidden;
 		transition: opacity 0.45s, visibility 0.45s;
@@ -259,7 +265,7 @@
 		@apply grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px];
 	}
 	.canvas-holder {
-		height: min(50vh, 520px);
+		height: min(56vh, 600px);
 	}
 	.canvas-holder :global(.canvas-box) {
 		height: 100%;

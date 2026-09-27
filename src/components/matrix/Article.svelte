@@ -18,7 +18,6 @@
 	import { Grab } from "lucide-svelte";
 	import ActionIcon from "./ActionIcon.svelte";
 	import InteractionsList from "./InteractionsList.svelte";
-	import DetSection from "./det/DetSection.svelte";
 	import { gsap, ScrollTrigger } from "$utils/gsap.js";
 	import { onMount } from "svelte";
 	import { arcadeMounted } from "$stores";
@@ -314,8 +313,8 @@
 		</div>
 	</Section>
 
-	<!-- CS375 modification: determinant, area and invertibility (see documentation/PLAN.md) -->
-	<DetSection />
+	<!-- CS375 modification: the determinant/area/invertibility section is mounted
+		from Index.svelte (outside this pinned article) — see documentation/PLAN.md -->
 
 	<!-- TODO: Composition of matrices -->
 </div>

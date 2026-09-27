@@ -30,10 +30,12 @@
 	const gridLines = [-3, -2, -1, 1, 2, 3];
 	const ticks = [-2, -1, 1, 2];
 
-	// two sample points from the original square, for the collapse story
+	// two sample points from the original square, for the collapse story:
+	// under [[1,2],[2,4]] both land on the SAME point (they differ by a
+	// null-space vector (2,-1)·0.12), which is exactly why no inverse exists
 	const samples = [
-		{ p: [0.55, 0.3], c: "#f1fa8c" },
-		{ p: [0.3, 0.8], c: "#ff79c6" }
+		{ p: [0.5, 0.4], c: "#f1fa8c" },
+		{ p: [0.74, 0.28], c: "#ff79c6" }
 	];
 
 	$: m = $detEntries;
