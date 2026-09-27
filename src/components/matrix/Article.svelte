@@ -314,6 +314,9 @@
 	</Section>
 
 	<!-- CS375 modification: the determinant story — see documentation/PLAN.md -->
+	<!-- tall runway so the original section's ending fully exits the viewport
+	     before the det story's text arrives (issue-02) -->
+	<div class="h-[800px]" />
 	<Section id="section-det" classNames="animate bg-gradient-to-l from-base-100 via-base-300 via-90%">
 		<h2 class="text-neutral">The Determinant: Area and Invertibility</h2>
 

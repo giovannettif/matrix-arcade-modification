@@ -18,8 +18,6 @@
 		</div>
 	</div>
 
-	<!-- collapsible guide card on the RIGHT -->
-	<div class="fixed right-6 top-24 z-40 w-80 pointer-events-auto">
-		<DetGuide />
-	</div>
+	<!-- the guide positions itself next to each beat's target (DetGuide is fixed) -->
+	<DetGuide />
 {/if}

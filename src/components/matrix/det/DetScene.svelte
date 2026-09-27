@@ -148,12 +148,29 @@
 
 	// #article's transform is OWNED by the original's ScrollTrigger pin (its
 	// cached x wins on every render inside the pin region), so the det story
-	// slides the SECTION's own content into the reading column instead.
+	// slides the SECTION's own content instead. Every slide is computed
+	// RELATIVE to the article's live position: with real (smooth) scrolling
+	// the original's scrubbed slide holds the article at translateX -65ch,
+	// while after programmatic jumps it can sit parked at 0 — absolute
+	// offsets double-shift in the first regime.
+	function sectionNaturalX(sec) {
+		return sec.getBoundingClientRect().x - (gsap.getProperty(sec, "x") || 0);
+	}
 	function storySlideIn() {
 		const sec = document.getElementById("section-det");
-		if (sec) gsap.to(sec, { duration: 0.3, x: -sec.offsetWidth });
+		if (!sec) return;
+		const readingX = document.documentElement.clientWidth - sec.offsetWidth;
+		gsap.to(sec, { duration: 0.3, x: readingX - sectionNaturalX(sec) });
 	}
-	function storySlideOut() {
+	function storySlideHide() {
+		// try-it: push the story text fully off the right edge
+		const sec = document.getElementById("section-det");
+		if (!sec) return;
+		gsap.to(sec, { duration: 0.3, x: document.documentElement.clientWidth - sectionNaturalX(sec) });
+	}
+	function storySlideRestore() {
+		// back into the article's natural flow (the section is off-screen anyway
+		// once the det story is exited)
 		const sec = document.getElementById("section-det");
 		if (sec) gsap.to(sec, { duration: 0.3, x: 0 });
 	}
@@ -191,7 +208,7 @@
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
 			expandPlayground.set(savedExpand);
 			slideCanvas(savedExpand ? "0" : "-32.5ch");
-			storySlideOut();
+			storySlideRestore();
 			savedExpand = false;
 			const cc = get(cameraControls);
 			if (cc && savedCamera) {
@@ -206,7 +223,7 @@
 			endRound();
 			expandPlayground.set(true);
 			slideCanvas("0");
-			storySlideOut();
+			storySlideHide();
 			gsap.set("#canvas-wrapper", { pointerEvents: "auto" });
 			return;
 		}
@@ -244,10 +261,11 @@
 		const sec = document.getElementById("section-det");
 		if (sec) {
 			const secX = sec.getBoundingClientRect().x;
-			const artX = document.getElementById("article").getBoundingClientRect().x;
-			const slidIn = secX < artX - sec.offsetWidth / 2;
+			const vw = document.documentElement.clientWidth;
+			const slidIn = secX < vw - 200;
+			const hidden = secX >= vw - 40;
 			if (step <= 5 && !slidIn) storySlideIn();
-			if (step === 6 && slidIn) storySlideOut();
+			if (step === 6 && !hidden) storySlideHide();
 		}
 		const cc = get(cameraControls);
 		if (cc && Math.abs(cc.polarAngle - 0.06) > 0.25) {

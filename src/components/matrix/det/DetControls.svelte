@@ -54,7 +54,7 @@
 	<div class="title">Transform the unit square</div>
 
 	<!-- live readouts (beat 1 of the guide points here) -->
-	<div class="readouts" class:guide-hl={$detGuideStep === 1}>
+	<div class="readouts" data-tour="readout" class:guide-hl={$detGuideStep === 1}>
 		<span style:color={$detCollapsed ? "#bd93f9" : $detFlipped ? "#ff79c6" : "#8be9fd"}>
 			det(A) = {$detCollapsed ? "0.0" : $detValue.toFixed(1)}
 		</span>
@@ -67,7 +67,7 @@
 
 	<div class="flex flex-wrap items-center gap-4">
 		<!-- Matrix entry grid (beat 0 of the guide points here) -->
-		<div class="matrix-grid" class:frozen={roundLive} class:guide-hl={$detGuideStep === 0}>
+		<div class="matrix-grid" data-tour="matrix" class:frozen={roundLive} class:guide-hl={$detGuideStep === 0}>
 			<div>
 				<NumberSpinner bind:value={vals[0]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
 			</div>

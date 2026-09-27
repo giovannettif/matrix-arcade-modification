@@ -26,11 +26,11 @@
 		<div class="head">
 			<span class="title"><Gamepad2 size={16} /> Your turn</span>
 			{#if g.status === "idle"}
-				<div class="modes" class:guide-hl={$detGuideStep === 2}>
+				<div class="modes" data-tour="predict" class:guide-hl={$detGuideStep === 2}>
 					<button class="mode" on:click={() => startRound("forward")}>
 						<MousePointerClick size={15} /> Predict the image
 					</button>
-					<button class="mode" class:guide-hl={$detGuideStep === 3} on:click={() => startRound("inverse")}>
+					<button class="mode" data-tour="origin" class:guide-hl={$detGuideStep === 3} on:click={() => startRound("inverse")}>
 						<RotateCcw size={15} /> Predict the origin
 					</button>
 				</div>
