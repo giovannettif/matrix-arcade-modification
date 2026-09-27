@@ -96,7 +96,7 @@
 		transition: opacity 0.4s;
 	}
 	.dock.locked {
-		@apply pointer-events-none opacity-35;
+		@apply pointer-events-none opacity-[0.35];
 	}
 	.title {
 		@apply font-serif text-xl font-bold text-base-content;

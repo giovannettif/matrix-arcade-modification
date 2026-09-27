@@ -25,6 +25,7 @@
 
 	let wrapper;
 	let timers = [];
+	let active = false;
 
 	$: m = $detEntries;
 
@@ -71,10 +72,30 @@
 		window.addEventListener("scroll", onScroll, { passive: true });
 		window.addEventListener("resize", onScroll);
 		onScroll();
+		active = true;
 		enterChapter(1);
+
+		// Re-run the chapter-1 demo whenever the section re-enters the viewport,
+		// so late arrivals still see the animation from the start.
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting) {
+					if (!active) {
+						active = true;
+						enterChapter(get(detChapter));
+					}
+				} else {
+					active = false;
+				}
+			},
+			{ threshold: 0.01 }
+		);
+		io.observe(wrapper);
+
 		return () => {
 			window.removeEventListener("scroll", onScroll);
 			window.removeEventListener("resize", onScroll);
+			io.disconnect();
 			clearTimers();
 		};
 	});
@@ -83,8 +104,10 @@
 	$: if (wrapper && $detChapter) enterChapter($detChapter);
 </script>
 
-<div id="det-section" bind:this={wrapper} class="relative my-24 h-[520vh]">
-	<div class="sticky top-0 flex h-screen w-full items-center">
+<div id="det-section" bind:this={wrapper} class="relative h-[520vh]">
+	<!-- The stage is fixed to the viewport: the surrounding article column is
+	     intentionally full-bleed in this design, so centering must not depend on it. -->
+	<div class="stage-hold" class:on={active}>
 		<div class="stage">
 			<div class="stage-head">
 				<h2>Determinant, Area, and Invertibility</h2>
@@ -207,10 +230,21 @@
 </div>
 
 <style lang="postcss">
+	.stage-hold {
+		@apply pointer-events-none fixed left-1/2 top-1/2 z-30;
+		transform: translate(-50%, -50%);
+		opacity: 0;
+		visibility: hidden;
+		transition: opacity 0.45s, visibility 0.45s;
+	}
+	.stage-hold.on {
+		@apply pointer-events-auto;
+		opacity: 1;
+		visibility: visible;
+	}
 	.stage {
-		@apply rounded-2xl border border-[#44475a66] bg-[#0a0a12]/97 p-6 shadow-[0_0_60px_rgba(0,0,0,0.6)];
-		width: min(1200px, 92vw);
-		margin-left: calc(min(1200px, 92vw) / -2);
+		@apply max-h-[94vh] overflow-hidden rounded-2xl border border-[#44475a66] bg-[#0b0b14] p-6 shadow-[0_0_60px_rgba(0,0,0,0.6)];
+		width: min(1200px, 94vw);
 	}
 	.stage-head {
 		@apply mb-4;
@@ -225,7 +259,7 @@
 		@apply grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px];
 	}
 	.canvas-holder {
-		height: min(54vh, 560px);
+		height: min(50vh, 520px);
 	}
 	.canvas-holder :global(.canvas-box) {
 		height: 100%;
@@ -239,6 +273,8 @@
 	.dot {
 		@apply h-1.5 w-10 rounded-full transition-all duration-300;
 	}
+	.dot.on {
+	}
 	.count {
 		@apply ml-2 font-sans text-xs text-[#8b90a7];
 	}
@@ -247,7 +283,7 @@
 		@apply m-0 flex list-none flex-col gap-3 p-0;
 	}
 	.stage-rail li {
-		@apply flex items-start gap-3 rounded-xl border border-transparent p-3 opacity-35 transition-all duration-300;
+		@apply flex items-start gap-3 rounded-xl border border-transparent p-3 opacity-[0.35] transition-all duration-300;
 	}
 	.stage-rail li.active {
 		@apply opacity-100;
