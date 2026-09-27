@@ -271,9 +271,10 @@
 </div>
 
 <style lang="postcss">
-	/* The site's only fixed-position button (playground toggle) overlaps the
-	   stage while the determinant section is on screen. Fully global selector. */
-	:global(body.det-active button.fixed) {
+	/* The site's own fixed UI (playground toggle button + the fixed inputs panel)
+	   would overlap the stage while the determinant section is on screen. */
+	:global(body.det-active button.fixed),
+	:global(body.det-active #inputs) {
 		display: none !important;
 	}
 	.stage-hold {
