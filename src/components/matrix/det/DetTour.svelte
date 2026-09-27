@@ -4,29 +4,29 @@
 
 	const steps = [
 		{
-			x: 30,
-			y: 58,
+			x: 36,
+			y: 50,
 			icon: MousePointerClick,
 			title: "Edit the matrix",
 			body: "Drag a number left or right to change it — or click it once and type your own."
 		},
 		{
-			x: 34,
-			y: 74,
+			x: 47,
+			y: 66,
 			icon: Gauge,
 			title: "Watch the determinant",
 			body: "det(A) and the area update live as the shape morphs. Get it to 0 and the plane collapses!"
 		},
 		{
-			x: 46,
-			y: 74,
+			x: 60,
+			y: 50,
 			icon: Play,
 			title: "Replay & scrub",
 			body: "Play or pause the morph, skip to the end, and set the animation speed."
 		},
 		{
-			x: 50,
-			y: 30,
+			x: 46,
+			y: 22,
 			icon: Crosshair,
 			title: "Predict on the canvas",
 			body: "Start a prediction round below, then click the canvas where you think the answer is."

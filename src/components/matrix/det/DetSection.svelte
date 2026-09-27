@@ -314,6 +314,16 @@
 		width: auto;
 		max-width: 100%;
 	}
+	@media (max-width: 1023px) {
+		/* stacked mobile layout: canvas flows with width, no fixed height */
+		.canvas-holder {
+			height: auto;
+		}
+		.canvas-holder :global(.canvas-box) {
+			height: auto;
+			width: 100%;
+		}
+	}
 
 	.dots {
 		@apply mt-3 flex items-center justify-center gap-2;
