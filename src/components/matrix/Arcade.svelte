@@ -45,6 +45,8 @@
 		playgroundSt,
 		vectorCoordsInput
 	} from "$stores";
+	// CS375: det story step — Maxwell is hidden while the determinant section plays
+	import { detStep } from "$stores/det.js";
 	import {
 		colorVector,
 		colorX,
@@ -2371,7 +2373,7 @@
 </T.Group>
 
 <!-- Maxwell the carryable cat -->
-<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false}>
+<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
 	{#await useGltf(`${assets}/maxwell.glb`) then model}
 		<T
 			is={model.scene}

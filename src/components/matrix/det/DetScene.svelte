@@ -8,6 +8,7 @@
 	import * as THREE from "three";
 	import {
 		showPlayground,
+		expandPlayground,
 		cameraControls,
 		cameraAutoRotate,
 		sceneMounted
@@ -15,6 +16,8 @@
 	import {
 		detStep,
 		detEntries,
+		detFlipped,
+		detCollapsed,
 		detGame,
 		setDetTarget,
 		resetToIdentity,
@@ -90,9 +93,12 @@
 	function arrowXform(x, y) {
 		const len = Math.min(Math.hypot(x, y) || 1e-6, 4);
 		const theta = Math.atan2(y, x);
+		const shaftY = Math.max(len - 0.22, 0.01);
 		return {
 			shaftZ: theta - Math.PI / 2,
-			shaftY: Math.max(len - 0.22, 0.01),
+			shaftY,
+			midX: (Math.cos(theta) * shaftY) / 2,
+			midY: (Math.sin(theta) * shaftY) / 2,
 			tipX: Math.cos(theta) * (len - 0.11),
 			tipY: Math.sin(theta) * (len - 0.11)
 		};
@@ -137,38 +143,136 @@
 	};
 
 	let mounted = false;
+	let savedCamera = null;
+	let savedExpand = false;
+
+	// #article's transform is OWNED by the original's ScrollTrigger pin (its
+	// cached x wins on every render inside the pin region), so the det story
+	// slides the SECTION's own content into the reading column instead.
+	function storySlideIn() {
+		const sec = document.getElementById("section-det");
+		if (sec) gsap.to(sec, { duration: 0.3, x: -sec.offsetWidth });
+	}
+	function storySlideOut() {
+		const sec = document.getElementById("section-det");
+		if (sec) gsap.to(sec, { duration: 0.3, x: 0 });
+	}
+	function slideCanvas(tx) {
+		gsap.to("#canvas-wrapper", { duration: 0.3, translateX: tx });
+	}
 
 	function applyStep(n) {
 		const prev = get(detStep);
 		if (prev === n) return;
 		detStep.set(n);
 		if (prev === 0 && n >= 1) {
-			// entering the det story: hide the site's playground UI, settle the
-			// camera, slide the article text into its reading position
+			// entering the det story: park the site's playground UI, slide the
+			// story text into the reading column, settle the camera top-down
 			showPlayground.set(false);
 			gsap.set("#inputs", { autoAlpha: 0 });
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
-			gsap.set("#article", { x: "-65ch" });
+			savedExpand = get(expandPlayground);
+			if (savedExpand) expandPlayground.set(false);
+			storySlideIn();
+			slideCanvas("-32.5ch");
 			if (get(cameraAutoRotate)) cameraAutoRotate.set(false);
 			const cc = get(cameraControls);
-			if (cc) gsap.to(cc, { duration: 1, polarAngle: 0, azimuthAngle: 0, distance: 15 });
+			if (cc) {
+				savedCamera = { azimuth: cc.azimuthAngle, polar: cc.polarAngle, distance: cc.distance };
+				// polar ~0 is degenerate for the spherical camera, so stop just short
+				cc.rotateTo(0, 0.06, true);
+				cc.dollyTo(15, true);
+			}
 		}
 		if (prev >= 1 && n === 0) {
 			// back into the 3D playground section — restore its state
 			showPlayground.set(true);
 			gsap.set("#inputs", { autoAlpha: 1 });
+			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
+			expandPlayground.set(savedExpand);
+			slideCanvas(savedExpand ? "0" : "-32.5ch");
+			storySlideOut();
+			savedExpand = false;
+			const cc = get(cameraControls);
+			if (cc && savedCamera) {
+				cc.rotateTo(savedCamera.azimuth, savedCamera.polar, true);
+				cc.dollyTo(savedCamera.distance, true);
+				savedCamera = null;
+			}
 		}
 		if (n === 6) {
-			// try-it: identity sandbox + the original's expand-playground translation
+			// try-it: identity sandbox + the original's expand-playground layout
 			resetToIdentity();
 			endRound();
-			gsap.to("#article", { duration: 0.3, translateX: 0 });
-			gsap.to("#canvas-wrapper", { duration: 0.3, translateX: 0 });
+			expandPlayground.set(true);
+			slideCanvas("0");
+			storySlideOut();
 			gsap.set("#canvas-wrapper", { pointerEvents: "auto" });
 			return;
 		}
+		if (prev === 6) {
+			// leaving the try-it back into the story: reading layout again
+			expandPlayground.set(false);
+			slideCanvas("-32.5ch");
+			storySlideIn();
+			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
+		}
 		const m = STEP_MATRIX[n];
 		if (m) setDetTarget(m, { duration: 1.4 });
+	}
+
+	function repairState() {
+		// ScrollTrigger.refresh() (resize, layout shifts) re-fires the original
+		// sections' callbacks, which can stomp the det story state — re-assert it
+		const step = get(detStep);
+		if (step < 1) return;
+		if (get(showPlayground)) showPlayground.set(false);
+		const inputs = document.getElementById("inputs");
+		if (inputs && parseFloat(getComputedStyle(inputs).opacity) > 0.05) {
+			gsap.set("#inputs", { autoAlpha: 0 });
+		}
+		const cw = document.getElementById("canvas-wrapper");
+		if (cw) {
+			const want = step === 6 ? "auto" : "none";
+			if (getComputedStyle(cw).pointerEvents !== want) {
+				gsap.set("#canvas-wrapper", { pointerEvents: want });
+			}
+			const canvasX = cw.getBoundingClientRect().x;
+			if (step === 6 && canvasX < -50) slideCanvas("0");
+			if (step <= 5 && canvasX > -50) slideCanvas("-32.5ch");
+		}
+		const sec = document.getElementById("section-det");
+		if (sec) {
+			const secX = sec.getBoundingClientRect().x;
+			const artX = document.getElementById("article").getBoundingClientRect().x;
+			const slidIn = secX < artX - sec.offsetWidth / 2;
+			if (step <= 5 && !slidIn) storySlideIn();
+			if (step === 6 && slidIn) storySlideOut();
+		}
+		const cc = get(cameraControls);
+		if (cc && Math.abs(cc.polarAngle - 0.06) > 0.25) {
+			cc.rotateTo(0, 0.06, true);
+			cc.dollyTo(15, true);
+		}
+	}
+
+	function revealPassedSteps(center) {
+		// the original attaches a paused gsap.from({opacity: 0}) entrance to
+		// every child of every section.animate, played by a ScrollTrigger whose
+		// pin-adjusted start never lines up with the det steps' scroll — force
+		// the reveal for det content once it reaches the reading position
+		const section = document.getElementById("section-det");
+		if (!section) return;
+		const revealed = [];
+		for (const child of section.children) {
+			if (child.getBoundingClientRect().top <= center + 80) revealed.push(child);
+		}
+		if (!revealed.length) return;
+		gsap.set(revealed, { clearProps: "opacity,transform" });
+		for (const child of revealed) {
+			const lis = child.querySelectorAll("li");
+			if (lis.length) gsap.set(lis, { clearProps: "opacity,transform" });
+		}
 	}
 
 	function detUpdate() {
@@ -184,7 +288,9 @@
 			const el = document.getElementById(`det-st-${n}`);
 			if (el) el.classList.toggle("active", n === current);
 		}
+		revealPassedSteps(center);
 		if (get(detStep) !== current) applyStep(current);
+		repairState();
 	}
 
 	onMount(() => {
