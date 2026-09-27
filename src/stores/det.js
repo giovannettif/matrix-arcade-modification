@@ -142,8 +142,9 @@ function randomMatrix() {
 
 /** Near-collapsed matrix: second column is a multiple of the first. */
 function collapsedMatrix() {
-	const k = 1 + Math.round(Math.random() * 2); // 1..3
-	const col = [randEntry(), randEntry()];
+	const k = Math.random() < 0.5 ? 1 : 2;
+	const r = () => [-1, 0, 1][Math.floor(Math.random() * 3)];
+	const col = [r(), r()];
 	if (col[0] === 0 && col[1] === 0) col[0] = 1;
 	// columns (a,c) and (b,d): make (b,d) = k·(a,c)
 	return { matrix: [col[0], k * col[0], col[1], k * col[1]], det: 0 };
@@ -170,14 +171,38 @@ export function startRound(mode, fixed = {}) {
 		target = mul(matrix, point);
 	} else if (degenerate) {
 		({ matrix } = fixed.matrix ? { matrix: fixed.matrix } : collapsedMatrix());
-		point = fixed.point ?? [randUnit(), randUnit()];
-		target = mul(matrix, point);
-		// preimages: point + t·(null-space direction of the 2×2 matrix)
-		const n = [-matrix[1], matrix[0]]; // perpendicular to col1 ⇒ null space
+		// pick a point whose image stays on screen (|target| ≤ 2.3)
+		for (let i = 0; i < 30; i++) {
+			point = [randUnit(), randUnit()];
+			target = mul(matrix, point);
+			if (Math.hypot(target[0], target[1]) <= 2.3) break;
+		}
+		// preimages: point + t·u where u spans the null space; t is bounded so
+		// every preimage stays inside the unit square (they must remain EXACT
+		// preimages — clamping coordinates would break that)
+		const n = [-matrix[1], matrix[0]];
 		const len = Math.hypot(n[0], n[1]) || 1;
 		const u = [n[0] / len, n[1] / len];
-		preimages = [point, [point[0] + 0.5 * u[0], point[1] + 0.5 * u[1]], [point[0] - 0.5 * u[0], point[1] - 0.5 * u[1]]]
-			.map((p) => [Math.min(0.95, Math.max(0.05, p[0])), Math.min(0.95, Math.max(0.05, p[1]))]);
+		let tLo = -10;
+		let tHi = 10;
+		for (let i = 0; i < 2; i++) {
+			if (u[i] > 1e-6) {
+				tLo = Math.max(tLo, (0.05 - point[i]) / u[i]);
+				tHi = Math.min(tHi, (0.95 - point[i]) / u[i]);
+			} else if (u[i] < -1e-6) {
+				tLo = Math.max(tLo, (0.95 - point[i]) / u[i]);
+				tHi = Math.min(tHi, (0.05 - point[i]) / u[i]);
+			}
+		}
+		if (tLo > tHi) {
+			tLo = 0;
+			tHi = 0;
+		}
+		preimages = [
+			point,
+			[point[0] + (tLo + (tHi - tLo) * 0.25) * u[0], point[1] + (tLo + (tHi - tLo) * 0.25) * u[1]],
+			[point[0] + (tLo + (tHi - tLo) * 0.75) * u[0], point[1] + (tLo + (tHi - tLo) * 0.75) * u[1]]
+		];
 	} else {
 		({ matrix } = fixed.matrix ? { matrix: fixed.matrix } : randomMatrix());
 		point = fixed.point ?? [randUnit(), randUnit()];

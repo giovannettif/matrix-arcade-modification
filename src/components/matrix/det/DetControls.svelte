@@ -7,6 +7,7 @@
 		detPlaying,
 		detValue,
 		detSpeed,
+		detGame,
 		setDetTarget,
 		playDet,
 		pauseDet,
@@ -22,15 +23,16 @@
 	let lastSent = JSON.stringify(vals);
 
 	$: interactive = $detChapter === 3;
+	$: roundLive = $detGame.status === "asking";
 
-	// Keep the spinners in sync when chapter scripts change the target.
-	$: if (!$detChapter || !interactive) {
+	// Keep the spinners in sync when chapter scripts or game rounds set the target.
+	$: if (!$detChapter || !interactive || roundLive) {
 		vals = [...$detTarget];
 		lastSent = JSON.stringify(vals);
 	}
 
-	// User edits morph the shape live.
-	$: if (interactive && JSON.stringify(vals) !== lastSent) {
+	// User edits morph the shape live (only while no round is live).
+	$: if (interactive && !roundLive && JSON.stringify(vals) !== lastSent) {
 		lastSent = JSON.stringify(vals);
 		setDetTarget([...vals], { duration: 0.7 });
 	}
@@ -39,12 +41,14 @@
 <div class="dock {interactive ? '' : 'locked'}">
 	<div class="title">Transform the unit square</div>
 	<div class="hint">
-		See how a 2 × 2 matrix moves the basis vectors and changes area.
+		{roundLive
+			? "Matrix locked while the round is live — it resets after the round."
+			: "See how a 2 × 2 matrix moves the basis vectors and changes area."}
 	</div>
 
 	<div class="flex flex-wrap items-center gap-4">
 		<!-- Matrix entry grid -->
-		<div class="matrix-grid">
+		<div class="matrix-grid" class:frozen={roundLive}>
 			<div>
 				<NumberSpinner bind:value={vals[0]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
 			</div>
@@ -107,6 +111,9 @@
 	.matrix-grid {
 		@apply grid grid-cols-2 grid-rows-2 px-3 py-1;
 		box-shadow: inset 0 0 0 3px rgba(248, 248, 242, 0.85);
+	}
+	.matrix-grid.frozen {
+		@apply pointer-events-none opacity-70;
 	}
 	:global(.spinner) {
 		@apply w-16 bg-transparent px-2 py-1.5 text-right font-serif text-2xl transition-all;

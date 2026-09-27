@@ -2,7 +2,6 @@
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import { gsap } from "$utils/gsap.js";
-	import { showPlayground } from "$stores";
 	import {
 		detChapter,
 		detEntries,
@@ -76,6 +75,9 @@
 		const r = wrapper.getBoundingClientRect();
 		const vh = window.innerHeight;
 		const total = r.height - vh;
+		const inView = r.top < vh && r.bottom > 0;
+		document.body.classList.toggle("det-active", inView);
+		if (!inView) return;
 		if (total <= 0) return;
 		const p = Math.min(1, Math.max(0, -r.top / total));
 		const ch = p < B[1] ? 1 : p < B[2] ? 2 : p < B[3] ? 3 : 4;
@@ -88,26 +90,32 @@
 		onScroll();
 		active = true;
 		enterChapter(1);
+		// Scroll events alone are not enough: scroll anchoring (e.g. when the
+		// article's pin spacer recalibrates) shifts scrollY WITHOUT firing a
+		// scroll event. A light poll keeps the chapter in sync.
+		const poll = setInterval(onScroll, 300);
 
 		// Re-run the chapter-1 demo whenever the section re-enters the viewport,
 		// so late arrivals still see the animation from the start (with a cooldown
 		// so IO bounce at the boundary doesn't restart the demo mid-play).
-		// While the stage is on screen, the site's own playground toggle would
-		// overlap the canvas — hide it and restore on exit.
-		let wasShowingPlayground = false;
+		// While the stage is on screen, the site's own fixed playground toggle
+		// would overlap the canvas — body.det-active hides it via CSS (continuous,
+		// immune to the site's own scroll triggers re-enabling it).
 		const io = new IntersectionObserver(
 			(entries) => {
 				if (entries[0].isIntersecting) {
-					if (!active && Date.now() - lastEnter > 800) {
+					const first = !active;
+					active = true;
+					document.body.classList.add("det-active");
+					// replay the chapter demo only when genuinely re-entering
+					if (first && Date.now() - lastEnter > 800) {
 						lastEnter = Date.now();
-						active = true;
-						wasShowingPlayground = get(showPlayground);
-						showPlayground.set(false);
 						enterChapter(get(detChapter));
 					}
 				} else if (active) {
 					active = false;
-					showPlayground.set(wasShowingPlayground || true);
+					lastEnter = Date.now();
+					document.body.classList.remove("det-active");
 					endRound();
 					detTourStep.set(-1);
 				}
@@ -119,9 +127,10 @@
 		return () => {
 			window.removeEventListener("scroll", onScroll);
 			window.removeEventListener("resize", onScroll);
+			clearInterval(poll);
 			io.disconnect();
 			clearTimers();
-			showPlayground.set(true);
+			document.body.classList.remove("det-active");
 			endRound();
 			detTourStep.set(-1);
 		};
@@ -262,11 +271,15 @@
 </div>
 
 <style lang="postcss">
+	/* The site's only fixed-position button (playground toggle) overlaps the
+	   stage while the determinant section is on screen. Fully global selector. */
+	:global(body.det-active button.fixed) {
+		display: none !important;
+	}
 	.stage-hold {
 		@apply pointer-events-none relative;
 		opacity: 0;
 		visibility: hidden;
-		transition: opacity 0.45s, visibility 0.45s;
 	}
 	.stage-hold.on {
 		@apply pointer-events-auto;

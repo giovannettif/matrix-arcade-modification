@@ -46,7 +46,11 @@
 
 		{#if g.status === "revealed" && g.result}
 			{#if g.result.type === "correct"}
-				<div class="banner ok">Correct! This is the image of the point under A.</div>
+				<div class="banner ok">
+					{g.mode === "forward"
+						? "Correct! This is the image of the point under A."
+						: "Correct! You found the point that maps there — the transformation is undone."}
+				</div>
 			{:else if g.result.type === "wrong"}
 				<div class="banner no">
 					Not quite — the real answer is {fmt(g.result.answer)}. Watch the connector and
