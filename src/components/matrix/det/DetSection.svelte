@@ -2,16 +2,21 @@
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
 	import { gsap } from "$utils/gsap.js";
+	import { showPlayground } from "$stores";
 	import {
 		detChapter,
 		detEntries,
 		detValue,
+		detTourStep,
 		setDetTarget,
-		resetToIdentity
+		resetToIdentity,
+		endRound
 	} from "$stores/det.js";
 	import DetCanvas from "./DetCanvas.svelte";
 	import DetControls from "./DetControls.svelte";
 	import DetChip from "./DetChip.svelte";
+	import DetGame from "./DetGame.svelte";
+	import DetTour from "./DetTour.svelte";
 
 	const ACCENTS = { 1: "#8be9fd", 2: "#bd93f9", 3: "#50fa7b", 4: "#ff79c6" };
 	// share of the scroll runway per chapter (chapter 3 gets the most, for free play)
@@ -28,6 +33,7 @@
 	let calls = [];
 	let active = false;
 	let lastEnter = 0;
+	let tourDone = false;
 
 	$: m = $detEntries;
 
@@ -54,9 +60,14 @@
 			// demo: collapse the plane (det = 0)
 			setDetTarget([1, 2, 2, 4], { duration: 2.6 });
 		} else if (ch === 3) {
-			// free play — keep the current shape, controls unlock
+			// free play — controls unlock; first visit starts the guided tour
+			if (!tourDone) {
+				tourDone = true;
+				detTourStep.set(0);
+			}
 		} else if (ch === 4) {
-			// recap — freeze the scene
+			// recap — freeze the scene, close any open round
+			endRound();
 		}
 	}
 
@@ -81,16 +92,24 @@
 		// Re-run the chapter-1 demo whenever the section re-enters the viewport,
 		// so late arrivals still see the animation from the start (with a cooldown
 		// so IO bounce at the boundary doesn't restart the demo mid-play).
+		// While the stage is on screen, the site's own playground toggle would
+		// overlap the canvas — hide it and restore on exit.
+		let wasShowingPlayground = false;
 		const io = new IntersectionObserver(
 			(entries) => {
 				if (entries[0].isIntersecting) {
 					if (!active && Date.now() - lastEnter > 800) {
 						lastEnter = Date.now();
 						active = true;
+						wasShowingPlayground = get(showPlayground);
+						showPlayground.set(false);
 						enterChapter(get(detChapter));
 					}
-				} else {
+				} else if (active) {
 					active = false;
+					showPlayground.set(wasShowingPlayground || true);
+					endRound();
+					detTourStep.set(-1);
 				}
 			},
 			{ threshold: 0.01 }
@@ -102,6 +121,9 @@
 			window.removeEventListener("resize", onScroll);
 			io.disconnect();
 			clearTimers();
+			showPlayground.set(true);
+			endRound();
+			detTourStep.set(-1);
 		};
 	});
 
@@ -114,7 +136,8 @@
 	     ancestors here, so the stage can stick to the viewport and center normally. -->
 	<div class="sticky top-0 flex h-screen w-full items-center justify-center">
 		<div class="stage-hold" class:on={active}>
-		<div class="stage">
+			<DetTour />
+			<div class="stage" class:compact={$detChapter === 3}>
 			<div class="stage-head">
 				<h2>Determinant, Area, and Invertibility</h2>
 				<p>
@@ -129,6 +152,7 @@
 						<DetCanvas />
 					</div>
 					<DetControls />
+					<DetGame />
 					<div class="dots">
 						{#each chapters as c (c.n)}
 							<span
@@ -208,18 +232,19 @@
 											{:else}
 												<ul>
 													<li>
-														<b>det(A)</b> is the signed area scale
-														factor of the transformation.
+														<b>det(A)</b>&nbsp;is the signed area
+														scale factor of the transformation.
 													</li>
 													<li>
-														<b>det(A) ≠ 0</b> — no information is lost:
-														distinct points stay distinct, and the
-														transformation can be undone. The matrix
-														has an <b>inverse</b>.
+														<b>det(A) ≠ 0</b>&nbsp;— no information is
+														lost: distinct points stay distinct, and
+														the transformation can be undone. The
+														matrix has an <b>inverse</b>.
 													</li>
 													<li>
-														<b>det(A) = 0</b> — the plane collapses,
-														information is lost, and no inverse exists.
+														<b>det(A) = 0</b>&nbsp;— the plane
+														collapses, information is lost, and no
+														inverse exists.
 													</li>
 												</ul>
 											{/if}
@@ -238,7 +263,7 @@
 
 <style lang="postcss">
 	.stage-hold {
-		@apply pointer-events-none;
+		@apply pointer-events-none relative;
 		opacity: 0;
 		visibility: hidden;
 		transition: opacity 0.45s, visibility 0.45s;
@@ -249,8 +274,12 @@
 		visibility: visible;
 	}
 	.stage {
-		@apply max-h-[94vh] overflow-hidden rounded-2xl border border-[#44475a66] bg-[#0b0b14] p-6 shadow-[0_0_60px_rgba(0,0,0,0.6)];
+		@apply max-h-[94vh] overflow-y-auto rounded-2xl border border-[#44475a66] bg-[#0b0b14] p-6 shadow-[0_0_60px_rgba(0,0,0,0.6)];
 		width: min(1200px, 94vw);
+		scrollbar-width: thin;
+	}
+	.stage.compact .canvas-holder {
+		height: min(42vh, 400px);
 	}
 	.stage-head {
 		@apply mb-4;
@@ -325,6 +354,9 @@
 	}
 	.card ul {
 		@apply m-0 flex list-none flex-col gap-2 p-0;
+	}
+	.card ul li {
+		@apply m-0 block leading-snug;
 	}
 	.legend {
 		@apply flex flex-col gap-1.5;

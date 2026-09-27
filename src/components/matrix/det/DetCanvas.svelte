@@ -6,7 +6,9 @@
 		detChapter,
 		detPlayhead,
 		detCollapsed,
-		detFlipped
+		detFlipped,
+		detGame,
+		submitGuess
 	} from "$stores/det.js";
 
 	// Palette (dracula-compatible, matched to the reference mockup)
@@ -15,6 +17,9 @@
 	const CYAN = "#04d4f0"; // transformed shape
 	const PURPLE = "#bd93f9"; // collapse line
 	const PINK = "#ff79c6"; // flipped fill
+	const YELLOW = "#f1fa8c";
+	const GREEN = "#50fa7b";
+	const RED = "#ff5555";
 
 	const W = 720;
 	const H = 640;
@@ -34,8 +39,8 @@
 	// under [[1,2],[2,4]] both land on the SAME point (they differ by a
 	// null-space vector (2,-1)·0.12), which is exactly why no inverse exists
 	const samples = [
-		{ p: [0.5, 0.4], c: "#f1fa8c" },
-		{ p: [0.74, 0.28], c: "#ff79c6" }
+		{ p: [0.5, 0.4], c: YELLOW },
+		{ p: [0.74, 0.28], c: PINK }
 	];
 
 	$: m = $detEntries;
@@ -69,10 +74,37 @@
 		y: pcy((col1[1] + col2[1]) / 2)
 	};
 	$: calloutPos = { x: pcx(images[0][0]), y: pcy(images[0][1]) };
+
+	/* -------- prediction game layer -------- */
+	$: game = $detGame;
+	$: asking = game.status === "asking";
+	$: gRound = game.round;
+	$: gGuess = game.guess;
+	$: gResult = game.result;
+	$: gPreimages = gResult && gResult.preimages ? gResult.preimages : null;
+	$: askPoint = gRound ? (game.mode === "forward" ? gRound.point : gRound.target) : null;
+	$: guessX = gGuess ? px(gGuess[0]) : 0;
+	$: guessY = gGuess ? py(gGuess[1]) : 0;
+	$: answerX = gResult && gResult.answer ? px(gResult.answer[0]) : 0;
+	$: answerY = gResult && gResult.answer ? py(gResult.answer[1]) : 0;
+
+	function onCanvasClick(e) {
+		if (!asking) return;
+		const rect = e.currentTarget.getBoundingClientRect();
+		const vx = ((e.clientX - rect.left) / rect.width) * W;
+		const vy = ((e.clientY - rect.top) / rect.height) * H;
+		submitGuess([(vx - OX) / S, (OY - vy) / S]);
+	}
 </script>
 
 <div class="canvas-box relative">
-	<svg viewBox="0 0 {W} {H}" preserveAspectRatio="xMidYMid meet">
+	<svg
+		viewBox="0 0 {W} {H}"
+		preserveAspectRatio="xMidYMid meet"
+		class:asking
+		on:click={onCanvasClick}
+		style:cursor={asking ? "crosshair" : "default"}
+	>
 		{#each gridLines as g (g)}
 			<line class="grid" x1={px(g)} y1={py(-3)} x2={px(g)} y2={py(3)} />
 			<line class="grid" x1={px(-3)} y1={py(g)} x2={px(3)} y2={py(g)} />
@@ -142,6 +174,78 @@
 			/>
 		{/each}
 
+		<!-- prediction-game markers (on top) -->
+		{#if gRound}
+			{#if asking && game.mode === "inverse" && gRound.target}
+				<!-- marked target: where did this come from? -->
+				<circle
+					cx={px(gRound.target[0])}
+					cy={py(gRound.target[1])}
+					r="12"
+					fill="none"
+					stroke={YELLOW}
+					stroke-width="2.5"
+					class="pulse"
+				/>
+			{/if}
+			{#if asking && game.mode === "forward" && gRound.point}
+				<circle
+					cx={px(gRound.point[0])}
+					cy={py(gRound.point[1])}
+					r="9"
+					fill="none"
+					stroke={YELLOW}
+					stroke-width="2.5"
+					class="pulse"
+				/>
+			{/if}
+			{#if gPreimages && gRound.target}
+				{#each gPreimages as p, i (i)}
+					<line
+						x1={px(p[0])} y1={py(p[1])}
+						x2={px(gRound.target[0])} y2={py(gRound.target[1])}
+						stroke={PURPLE}
+						stroke-width="1.5"
+						stroke-dasharray="4 3"
+						opacity="0.85"
+					/>
+					<circle cx={px(p[0])} cy={py(p[1])} r="7" fill="none" stroke={PURPLE} stroke-width="2.5" />
+				{/each}
+			{/if}
+			{#if gGuess}
+				{#if gResult && gResult.answer && game.mode === "forward"}
+					<line
+						x1={guessX} y1={guessY}
+						x2={answerX} y2={answerY}
+						stroke={gResult.type === "correct" ? GREEN : RED}
+						stroke-width="2"
+						stroke-dasharray="5 4"
+					/>
+				{/if}
+				<circle
+					cx={guessX} cy={guessY}
+					r="7"
+					fill="none"
+					stroke={gResult ? (gResult.type === "correct" ? GREEN : RED) : "#f8f8f2"}
+					stroke-width="3"
+				/>
+				{#if gResult && gResult.type !== "correct"}
+					<line x1={guessX - 5} y1={guessY - 5} x2={guessX + 5} y2={guessY + 5} stroke={RED} stroke-width="2.5" />
+					<line x1={guessX - 5} y1={guessY + 5} x2={guessX + 5} y2={guessY - 5} stroke={RED} stroke-width="2.5" />
+				{/if}
+			{/if}
+			{#if gResult && gResult.answer && gResult.type !== "ambiguous"}
+				<circle
+					cx={answerX} cy={answerY}
+					r="6"
+					fill={gResult.type === "correct" ? GREEN : YELLOW}
+					stroke="#0b0b14"
+					stroke-width="1.5"
+					style="filter: drop-shadow(0 0 5px {gResult.type === 'correct' ? GREEN : YELLOW})"
+				/>
+			{/if}
+		{/if}
+
 		<defs>
 			<marker id="arrowAxis" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 				<path d="M 0 0 L 10 5 L 0 10 z" fill="#f8f8f2" />
@@ -157,11 +261,7 @@
 
 	<!-- HTML overlays -->
 	{#if !$detCollapsed}
-		<div
-			class="area-label"
-			style:left="{areaLabelPos.x}%"
-			style:top="{areaLabelPos.y}%"
-		>
+		<div class="area-label" style:left="{areaLabelPos.x}%" style:top="{areaLabelPos.y}%">
 			area = {$detArea.toFixed(1)}
 		</div>
 	{/if}
@@ -171,11 +271,7 @@
 	{/if}
 
 	{#if showCallout && imageGap < 0.35}
-		<div
-			class="callout"
-			style:left="{calloutPos.x}%"
-			style:top="{calloutPos.y}%"
-		>
+		<div class="callout" style:left="{calloutPos.x}%" style:top="{calloutPos.y}%">
 			Which point did this come from?
 			<b>Ambiguous — no inverse exists.</b>
 		</div>
@@ -214,17 +310,29 @@
 		fill: #6272a4;
 	}
 	.ghost {
-		fill: transparent;
-		stroke: #6272a4;
-		stroke-width: 1.5;
-		stroke-dasharray: 6 5;
-		opacity: 0.8;
+		fill: rgba(98, 114, 164, 0.06);
+		stroke: #8b90a7;
+		stroke-width: 2;
+		stroke-dasharray: 7 5;
+		opacity: 0.9;
 	}
 	.shape {
 		stroke-width: 2.5;
 		stroke-linejoin: round;
 		transition: fill 0.4s, stroke 0.4s;
 		filter: drop-shadow(0 0 10px rgba(4, 212, 240, 0.35));
+	}
+	.pulse {
+		animation: detpulse 1.4s ease-in-out infinite;
+	}
+	@keyframes detpulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.25;
+		}
 	}
 
 	.area-label {

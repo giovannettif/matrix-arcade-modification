@@ -99,3 +99,146 @@ export function resetToIdentity() {
 	detPlayhead.set(1);
 	detPlaying.set(false);
 }
+
+/* ------------------------------------------------------------------ */
+/* Prediction games (chapter 3)                                        */
+/* ------------------------------------------------------------------ */
+
+const GAME_TOL = 0.3; // click tolerance in grid units
+
+const gameIdle = {
+	mode: null, // null | "forward" | "inverse"
+	status: "idle", // idle | asking | revealed
+	round: null, // { matrix, point, target, preimages, degenerate }
+	guess: null, // [x, y] clicked by the user
+	result: null, // { type: "correct" | "wrong" | "ambiguous", answer, preimages }
+	streak: 0
+};
+
+export const detGame = writable({ ...gameIdle });
+
+function randUnit() {
+	// point inside the unit square, away from the edges
+	return Math.round((0.15 + Math.random() * 0.7) * 20) / 20;
+}
+
+function randEntry() {
+	return Math.round((Math.random() * 5 - 2.5)) ; // integer in [-2.5, 2.5] → -2..2
+}
+
+function det2([a, b, c, d]) {
+	return a * d - b * c;
+}
+
+/** Random 2×2 with a non-degenerate determinant, biased by category. */
+function randomMatrix() {
+	for (let i = 0; i < 50; i++) {
+		const m = [randEntry(), randEntry(), randEntry(), randEntry()];
+		const dt = det2(m);
+		if (Math.abs(dt) >= 0.5) return { matrix: m, det: dt };
+	}
+	return { matrix: [2, 1, 0, 1], det: 2 };
+}
+
+/** Near-collapsed matrix: second column is a multiple of the first. */
+function collapsedMatrix() {
+	const k = 1 + Math.round(Math.random() * 2); // 1..3
+	const col = [randEntry(), randEntry()];
+	if (col[0] === 0 && col[1] === 0) col[0] = 1;
+	// columns (a,c) and (b,d): make (b,d) = k·(a,c)
+	return { matrix: [col[0], k * col[0], col[1], k * col[1]], det: 0 };
+}
+
+function mul(m, p) {
+	return [m[0] * p[0] + m[1] * p[1], m[2] * p[0] + m[3] * p[1]];
+}
+
+/**
+ * Start a prediction round.
+ * forward: "where does the highlighted point land?"
+ * inverse: "where did the marked point come from?" — with det ≈ 0 this is
+ *          ill-posed: multiple origins map to the same image (the point of
+ *          the professor's feedback on the P1 proposal).
+ * Fixed matrix/point arguments are for deterministic QA only.
+ */
+export function startRound(mode, fixed = {}) {
+	const degenerate = mode === "inverse" && (fixed.degenerate ?? Math.random() < 0.4);
+	let matrix, det, point, target, preimages;
+	if (mode === "forward") {
+		({ matrix } = fixed.matrix ? { matrix: fixed.matrix } : randomMatrix());
+		point = fixed.point ?? [randUnit(), randUnit()];
+		target = mul(matrix, point);
+	} else if (degenerate) {
+		({ matrix } = fixed.matrix ? { matrix: fixed.matrix } : collapsedMatrix());
+		point = fixed.point ?? [randUnit(), randUnit()];
+		target = mul(matrix, point);
+		// preimages: point + t·(null-space direction of the 2×2 matrix)
+		const n = [-matrix[1], matrix[0]]; // perpendicular to col1 ⇒ null space
+		const len = Math.hypot(n[0], n[1]) || 1;
+		const u = [n[0] / len, n[1] / len];
+		preimages = [point, [point[0] + 0.5 * u[0], point[1] + 0.5 * u[1]], [point[0] - 0.5 * u[0], point[1] - 0.5 * u[1]]]
+			.map((p) => [Math.min(0.95, Math.max(0.05, p[0])), Math.min(0.95, Math.max(0.05, p[1]))]);
+	} else {
+		({ matrix } = fixed.matrix ? { matrix: fixed.matrix } : randomMatrix());
+		point = fixed.point ?? [randUnit(), randUnit()];
+		target = mul(matrix, point);
+	}
+	setDetTarget(matrix, { duration: 0.9 });
+	skipDet();
+	detGame.set({
+		...gameIdle,
+		mode,
+		status: "asking",
+		round: { matrix, point, target, preimages, degenerate: mode === "inverse" && degenerate },
+		streak: get(detGame).streak
+	});
+}
+
+/** Submit a clicked guess (grid coordinates). */
+export function submitGuess(g) {
+	const game = get(detGame);
+	if (game.status !== "asking" || !game.round) return;
+	const { matrix, point, target, degenerate } = game.round;
+	if (game.mode === "forward") {
+		const answer = mul(matrix, point);
+		const hit = Math.hypot(g[0] - answer[0], g[1] - answer[1]) <= GAME_TOL;
+		detGame.set({
+			...game,
+			guess: g,
+			status: "revealed",
+			result: { type: hit ? "correct" : "wrong", answer },
+			streak: hit ? game.streak + 1 : 0
+		});
+	} else {
+		// inverse: the guess must map to the marked target
+		const mapsToTarget = Math.hypot(...sub(mul(matrix, g), target)) <= GAME_TOL + 0.15;
+		if (degenerate) {
+			// ill-posed: show several origins that all map to the target
+			detGame.set({
+				...game,
+				guess: g,
+				status: "revealed",
+				result: { type: "ambiguous", answer: target, preimages: game.round.preimages }
+			});
+		} else {
+			detGame.set({
+				...game,
+				guess: g,
+				status: "revealed",
+				result: { type: mapsToTarget ? "correct" : "wrong", answer: point },
+				streak: mapsToTarget ? game.streak + 1 : 0
+			});
+		}
+	}
+}
+
+function sub(a, b) {
+	return [a[0] - b[0], a[1] - b[1]];
+}
+
+export function endRound() {
+	detGame.set({ ...get(detGame), mode: null, status: "idle", round: null, guess: null, result: null });
+}
+
+/** Convert click position (CSS pixels inside the canvas box) to grid coords. */
+export const GAME_TOL_VALUE = GAME_TOL;
