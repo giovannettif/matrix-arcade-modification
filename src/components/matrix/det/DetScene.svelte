@@ -187,7 +187,6 @@
 	let mounted = false;
 	let savedCamera = null;
 	let savedExpand = false;
-	let savedArticleX = 0;
 	let savedEndMatrix = null;
 	// set when the story engages before camera-controls exists (reload with
 	// scroll restoration straight into the story) — repairState retries once
@@ -247,6 +246,11 @@
 			if (savedExpand) expandPlayground.set(false);
 			storySlideIn();
 			slideCanvas("-32.5ch");
+			// the article column belongs at the reading offset for the whole
+			// story; a parked translateX 0 (reload straight into the story,
+			// before the original's scrub rendered) would leave it off-screen
+			// right with the canvas shifted — normalize to the designed value
+			gsap.to("#article", { duration: 0.3, translateX: "-65ch" });
 			if (get(cameraAutoRotate)) cameraAutoRotate.set(false);
 			const cc = get(cameraControls);
 			if (cc) {
@@ -267,6 +271,11 @@
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
 			expandPlayground.set(savedExpand);
 			slideCanvas(savedExpand ? "0" : "-32.5ch");
+			// TogglePlayground is unmounted while the story runs (its mount
+			// flag-skip swallows the first change), so nothing else restores
+			// the column here — park it at the designed offset or it stays
+			// off-screen right with the canvas shifted (right quarter dark)
+			gsap.to("#article", { duration: 0.3, translateX: savedExpand ? "0" : "-65ch" });
 			storySlideRestore();
 			savedExpand = false;
 			const cc = get(cameraControls);
@@ -291,7 +300,6 @@
 			// the original's expand also clears the article column
 			// (TogglePlayground tweens #article to translateX 0) — without this
 			// the dark 65ch column stays parked over the canvas (issue-03)
-			savedArticleX = gsap.getProperty("#article", "translateX") || 0;
 			gsap.to("#article", { duration: 0.3, translateX: 0 });
 			storySlideHide();
 			gsap.set("#canvas-wrapper", { pointerEvents: "auto" });
@@ -307,7 +315,10 @@
 				savedEndMatrix = null;
 			}
 			slideCanvas("-32.5ch");
-			gsap.to("#article", { duration: 0.3, translateX: savedArticleX });
+			// restore the designed reading offset (NOT a captured translateX —
+			// a value captured while the column was parked at 0 would leave it
+			// off-screen right with the canvas shifted: right quarter dark)
+			gsap.to("#article", { duration: 0.3, translateX: savedExpand ? "0" : "-65ch" });
 			storySlideIn();
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
 			const cc = get(cameraControls);
@@ -356,6 +367,15 @@
 			const canvasX = cw.getBoundingClientRect().x;
 			if (step === 6 && canvasX < -50) slideCanvas("0");
 			if (step <= 5 && canvasX > -50) slideCanvas("-32.5ch");
+		}
+		// same guard for the article column: reading offset during the story,
+		// cleared in the try-it sandbox — a parked 0 here is what leaves the
+		// canvas shifted with no text covering the right quarter
+		const ax = gsap.getProperty("#article", "translateX") || 0;
+		if (step <= 5 && ax > -100) {
+			gsap.to("#article", { duration: 0.3, translateX: "-65ch" });
+		} else if (step === 6 && ax < -100) {
+			gsap.to("#article", { duration: 0.3, translateX: "0" });
 		}
 		const sec = document.getElementById("section-det");
 		if (sec) {

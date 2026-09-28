@@ -2416,11 +2416,15 @@
 </T.Mesh> -->
 
 <!-- TODO: Remove objects that are not visible? -->
-<!-- Data -->
-<Planes view={transformedView} t={planesProps.t} />
-<Points view={transformedView} t={pointsProps.t} />
-<Planes view={transformedView} t={planes3dProps.t} dim3 />
-<Points view={transformedView} t={points3dProps.t} dim3 />
+<!-- Data — hidden during the det story: the chapter-1 sample dot field buried
+     the det shapes and callouts (user: "a bunch of clutter that hides what
+     we are trying to explain") -->
+{#if $detStep === 0}
+	<Planes view={transformedView} t={planesProps.t} />
+	<Points view={transformedView} t={pointsProps.t} />
+	<Planes view={transformedView} t={planes3dProps.t} dim3 />
+	<Points view={transformedView} t={points3dProps.t} dim3 />
+{/if}
 <!-- <Sphere view={transformedView} /> -->
 <!-- <Circle view={transformedView} /> -->
 
