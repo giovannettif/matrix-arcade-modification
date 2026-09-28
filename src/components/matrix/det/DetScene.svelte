@@ -574,7 +574,7 @@
 	{#if gPreimages}
 		{#each gPreimages as p, i (i)}
 			<T is={THREE.Mesh} position={[p[0], p[1], 0.12]}>
-				<torusGeometry args={[0.12, 0.03, 8, 32]} />
+				<torusGeometry args={[0.2, 0.045, 8, 32]} />
 				<meshBasicMaterial color={PURPLE} />
 			</T>
 		{/each}
