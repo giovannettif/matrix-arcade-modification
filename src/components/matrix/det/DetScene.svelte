@@ -193,6 +193,13 @@
 	function sectionNaturalX(sec) {
 		return sec.getBoundingClientRect().x - (gsap.getProperty(sec, "x") || 0);
 	}
+	function desktopLayout() {
+		// mirrors the original's `hidden lg:flex` gate on the article — the
+		// fallback notice shows and every det-st rect reads 0 below it
+		if (window.innerWidth < 1024) return false;
+		const article = document.getElementById("article");
+		return !!article && getComputedStyle(article).display !== "none";
+	}
 	function storySlideIn() {
 		const sec = document.getElementById("section-det");
 		if (!sec) return;
@@ -349,6 +356,30 @@
 
 	function detUpdate() {
 		if (!mounted) return;
+		// the original site is desktop-only: below the lg breakpoint the article
+		// is display:none and Title shows its "better viewed on desktop" notice.
+		// The hidden det section's rects all read 0 there, which would slam
+		// detStep to 6 and float the try-it overlay over that notice — so the
+		// whole story is gated the same way.
+		if (!desktopLayout()) {
+			for (let n = 1; n <= 6; n++) {
+				const el = document.getElementById(`det-st-${n}`);
+				if (el) el.classList.remove("active");
+			}
+			if (get(detStep) !== 0) {
+				// resized out of the desktop layout mid-story: clear the try-it
+				// layout without re-enabling the playground UI (the original's
+				// own triggers own that below the lg breakpoint)
+				detStep.set(0);
+				endRound();
+				expandPlayground.set(false);
+				storySlideRestore();
+				gsap.set("#canvas-wrapper", { pointerEvents: "none" });
+				savedCamera = null;
+				savedExpand = false;
+			}
+			return;
+		}
 		const center = window.innerHeight / 2;
 		let current = 0;
 		for (let n = 1; n <= 6; n++) {
@@ -358,9 +389,25 @@
 		}
 		// pin-spacer calibration varies between loads and can leave det-st-6
 		// short of the viewport center at max scroll — the try-it is the page's
-		// terminal state, so reaching the bottom always engages it
-		if (
-			window.innerHeight + window.scrollY >=
+		// terminal state, so it engages on the scroll bottom. Anchored to the
+		// FOOTER instead of raw max scroll: engage while the canvas is still
+		// full-bleed (sticky in the article), and hand off to a clean footer
+		// view once the footer covers the screen — otherwise the det overlay
+		// floats over the footer content with nothing behind it (issue-05)
+		const footerEl = document.querySelector("footer");
+		const bottomNow = window.innerHeight + window.scrollY;
+		if (footerEl) {
+			const articleBottom =
+				footerEl.getBoundingClientRect().top + window.scrollY;
+			if (bottomNow >= articleBottom - 40) current = 6;
+			if (
+				bottomNow >
+				articleBottom + window.innerHeight * 0.55
+			) {
+				current = 0;
+			}
+		} else if (
+			bottomNow >=
 			document.documentElement.scrollHeight - 500
 		) {
 			current = 6;

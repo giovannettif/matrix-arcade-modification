@@ -6,9 +6,11 @@
 </script>
 
 {#if $detStep === 6}
-	<!-- fixed controls panel on the LEFT — the original's #inputs pattern -->
+	<!-- fixed controls panel on the LEFT — the original's #inputs pattern.
+	     hidden below lg so it can never paint over the site's narrow-viewport
+	     fallback notice, even if detStep is ever stale -->
 	<div
-		class="fixed left-0 top-0 z-40 flex flex-col items-start gap-5 px-8 py-8 pointer-events-none"
+		class="fixed left-0 top-0 z-40 hidden flex-col items-start gap-5 px-8 py-8 pointer-events-none lg:flex"
 	>
 		<div class="pointer-events-auto">
 			<DetControls />

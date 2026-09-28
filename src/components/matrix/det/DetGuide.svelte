@@ -57,6 +57,14 @@
 		try {
 			const vw = window.innerWidth;
 			const vh = window.innerHeight;
+
+			// the det story is desktop-only — never paint over the site's
+			// narrow-viewport fallback notice
+			if (vw < 1024) {
+				parked = true;
+				moveTo(-9999, -9999);
+				return;
+			}
 			const cardW = cardEl.offsetWidth || 320;
 			const cardH = cardEl.offsetHeight || 170;
 
