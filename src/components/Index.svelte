@@ -7,7 +7,7 @@
 	import ToggleInput from "./matrix/ToggleInput.svelte";
 	import { debug, showPlayground } from "$stores";
 	import TogglePlayground from "./matrix/TogglePlayground.svelte";
-	import { loaded } from "$stores";
+	import { loaded, sceneMounted } from "$stores";
 	import { gsap, ScrollTrigger } from "$utils/gsap.js";
 	import Footer from "./matrix/Footer.svelte";
 	import DetOverlay from "./matrix/det/DetOverlay.svelte";
@@ -15,7 +15,11 @@
 	import { RingLoader } from "svelte-loading-spinners";
 	import { colorVector } from "$data/variables";
 
-	$: if ($mq.lg && $loaded) {
+	// CS375: hold the loading overlay until the 3D scene (and with it every
+	// ScrollTrigger pin created by Arcade.animate on $sceneMounted) exists.
+	// Fading at $loaded alone exposed a scrollable, uncalibrated page during
+	// dev hydration — when the pins landed mid-scroll the text jumped.
+	$: if ($mq.lg && $loaded && $sceneMounted) {
 		gsap.to("#loading-overlay", {
 			autoAlpha: 0,
 			duration: 2
