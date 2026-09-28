@@ -2349,14 +2349,14 @@
 
 <!-- Transformed elements -->
 <!-- TODO: Overlay another grid in the hero for a cool effect? -->
-<T.Group renderOrder={-2} matrix={$matrixTransform} matrixAutoUpdate={false}>
+<T.Group renderOrder={-2} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
 	<!-- Grids -->
 	<!-- FIXME: Don't do infinite grid? A bit confusing -->
 
 	<Grid {...transformedGridProps} axes={"xyz"} />
 </T.Group>
 
-<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false}>
+<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
 	<!-- 3d grid -->
 	<Grid
 		axes={"xzy"}
