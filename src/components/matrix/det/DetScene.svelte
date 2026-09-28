@@ -11,7 +11,8 @@
 		expandPlayground,
 		cameraControls,
 		cameraAutoRotate,
-		sceneMounted
+		sceneMounted,
+		endMatrix
 	} from "$stores";
 	import {
 		detStep,
@@ -182,6 +183,7 @@
 	let savedCamera = null;
 	let savedExpand = false;
 	let savedArticleX = 0;
+	let savedEndMatrix = null;
 
 	// #article's transform is OWNED by the original's ScrollTrigger pin (its
 	// cached x wins on every render inside the pin region), so the det story
@@ -267,6 +269,12 @@
 			// try-it: identity sandbox + the original's expand-playground layout
 			resetToIdentity();
 			endRound();
+			// the try-it shows the original's transformed grid again (it IS the
+			// playground grid) — reset the original's matrix warp to identity
+			// so a stale playground matrix can't render stray lines behind the
+			// sandbox; restored on exit
+			savedEndMatrix = get(endMatrix);
+			endMatrix.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 			expandPlayground.set(true);
 			slideCanvas("0");
 			// the original's expand also clears the article column
@@ -283,6 +291,10 @@
 			// and re-assert the story camera — the try-it lets the user orbit
 			// and zoom freely, and repairState only guards steps ≤ 5 (issue-04)
 			expandPlayground.set(false);
+			if (savedEndMatrix) {
+				endMatrix.set(savedEndMatrix);
+				savedEndMatrix = null;
+			}
 			slideCanvas("-32.5ch");
 			gsap.to("#article", { duration: 0.3, translateX: savedArticleX });
 			storySlideIn();
@@ -373,6 +385,10 @@
 				// layout without re-enabling the playground UI (the original's
 				// own triggers own that below the lg breakpoint)
 				document.body.classList.remove("det-story");
+				if (savedEndMatrix) {
+					endMatrix.set(savedEndMatrix);
+					savedEndMatrix = null;
+				}
 				detStep.set(0);
 				endRound();
 				expandPlayground.set(false);

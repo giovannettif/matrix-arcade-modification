@@ -2349,14 +2349,17 @@
 
 <!-- Transformed elements -->
 <!-- TODO: Overlay another grid in the hero for a cool effect? -->
-<T.Group renderOrder={-2} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
+<!-- hidden during STORY steps (1-5, the det shapes own the canvas) but shown
+     at the try-it (6) where it is the playground's grid, identity-warped —
+     the det code resets endMatrix for the try-it's duration -->
+<T.Group renderOrder={-2} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0 || $detStep === 6}>
 	<!-- Grids -->
 	<!-- FIXME: Don't do infinite grid? A bit confusing -->
 
 	<Grid {...transformedGridProps} axes={"xyz"} />
 </T.Group>
 
-<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
+<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0 || $detStep === 6}>
 	<!-- 3d grid -->
 	<Grid
 		axes={"xzy"}
