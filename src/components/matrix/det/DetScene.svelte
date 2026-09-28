@@ -181,6 +181,7 @@
 	let mounted = false;
 	let savedCamera = null;
 	let savedExpand = false;
+	let savedArticleX = 0;
 
 	// #article's transform is OWNED by the original's ScrollTrigger pin (its
 	// cached x wins on every render inside the pin region), so the det story
@@ -259,16 +260,29 @@
 			endRound();
 			expandPlayground.set(true);
 			slideCanvas("0");
+			// the original's expand also clears the article column
+			// (TogglePlayground tweens #article to translateX 0) — without this
+			// the dark 65ch column stays parked over the canvas (issue-03)
+			savedArticleX = gsap.getProperty("#article", "translateX") || 0;
+			gsap.to("#article", { duration: 0.3, translateX: 0 });
 			storySlideHide();
 			gsap.set("#canvas-wrapper", { pointerEvents: "auto" });
 			return;
 		}
 		if (prev === 6) {
-			// leaving the try-it back into the story: reading layout again
+			// leaving the try-it back into the story: reading layout again,
+			// and re-assert the story camera — the try-it lets the user orbit
+			// and zoom freely, and repairState only guards steps ≤ 5 (issue-04)
 			expandPlayground.set(false);
 			slideCanvas("-32.5ch");
+			gsap.to("#article", { duration: 0.3, translateX: savedArticleX });
 			storySlideIn();
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
+			const cc = get(cameraControls);
+			if (cc) {
+				cc.rotateTo(0, 0.06, true);
+				cc.dollyTo(15, true);
+			}
 		}
 		const m = STEP_MATRIX[n];
 		if (m) setDetTarget(m, { duration: 1.4 });
@@ -304,7 +318,11 @@
 			if (step === 6 && !hidden) storySlideHide();
 		}
 		const cc = get(cameraControls);
-		if (cc && Math.abs(cc.polarAngle - 0.06) > 0.25) {
+		if (
+			step <= 5 &&
+			cc &&
+			(Math.abs(cc.polarAngle - 0.06) > 0.25 || Math.abs(cc.distance - 15) > 0.5)
+		) {
 			cc.rotateTo(0, 0.06, true);
 			cc.dollyTo(15, true);
 		}
@@ -337,6 +355,15 @@
 			const el = document.getElementById(`det-st-${n}`);
 			if (!el) continue;
 			if (el.getBoundingClientRect().top <= center) current = n;
+		}
+		// pin-spacer calibration varies between loads and can leave det-st-6
+		// short of the viewport center at max scroll — the try-it is the page's
+		// terminal state, so reaching the bottom always engages it
+		if (
+			window.innerHeight + window.scrollY >=
+			document.documentElement.scrollHeight - 500
+		) {
+			current = 6;
 		}
 		for (let n = 1; n <= 6; n++) {
 			const el = document.getElementById(`det-st-${n}`);
