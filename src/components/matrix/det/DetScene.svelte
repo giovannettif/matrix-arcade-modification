@@ -189,6 +189,9 @@
 	let savedExpand = false;
 	let savedArticleX = 0;
 	let savedEndMatrix = null;
+	// set when the story engages before camera-controls exists (reload with
+	// scroll restoration straight into the story) — repairState retries once
+	let cameraPending = false;
 
 	// #article's transform is OWNED by the original's ScrollTrigger pin (its
 	// cached x wins on every render inside the pin region), so the det story
@@ -251,6 +254,9 @@
 				// polar ~0 is degenerate for the spherical camera, so stop just short
 				cc.rotateTo(0, 0.06, true);
 				cc.dollyTo(15, true);
+			} else {
+				// camera-controls not ready yet (reload straight into the story)
+				cameraPending = true;
 			}
 		}
 		if (prev >= 1 && n === 0) {
@@ -319,6 +325,23 @@
 		// sections' callbacks, which can stomp the det story state — re-assert it
 		const step = get(detStep);
 		if (step < 1) return;
+		// the story engaged before camera-controls existed: apply the story
+		// camera once it is ready (one-shot)
+		if (cameraPending) {
+			const ccEarly = get(cameraControls);
+			if (ccEarly) {
+				if (!savedCamera) {
+					savedCamera = {
+						azimuth: ccEarly.azimuthAngle,
+						polar: ccEarly.polarAngle,
+						distance: ccEarly.distance
+					};
+				}
+				ccEarly.rotateTo(0, 0.06, true);
+				ccEarly.dollyTo(15, true);
+				cameraPending = false;
+			}
+		}
 		if (get(showPlayground)) showPlayground.set(false);
 		const inputs = document.getElementById("inputs");
 		if (inputs && parseFloat(getComputedStyle(inputs).opacity) > 0.05) {
@@ -551,7 +574,7 @@
 	{#if gPreimages}
 		{#each gPreimages as p, i (i)}
 			<T is={THREE.Mesh} position={[p[0], p[1], 0.12]}>
-				<torusGeometry args={[0.075, 0.018, 8, 32]} />
+				<torusGeometry args={[0.12, 0.03, 8, 32]} />
 				<meshBasicMaterial color={PURPLE} />
 			</T>
 		{/each}
