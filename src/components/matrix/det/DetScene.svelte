@@ -2,7 +2,7 @@
 	// det shapes rendered inside the original Threlte scene (v2)
 	import { onMount, onDestroy } from "svelte";
 	import { get } from "svelte/store";
-	import { gsap } from "$utils/gsap.js";
+	import { gsap, ScrollTrigger } from "$utils/gsap.js";
 	import { HTML } from "@threlte/extras";
 	import { T } from "@threlte/core";
 	import * as THREE from "three";
@@ -194,11 +194,11 @@
 
 	// #article's transform is OWNED by the original's ScrollTrigger pin (its
 	// cached x wins on every render inside the pin region), so the det story
-	// slides the SECTION's own content instead. Every slide is computed
-	// RELATIVE to the article's live position: with real (smooth) scrolling
-	// the original's scrubbed slide holds the article at translateX -65ch,
-	// while after programmatic jumps it can sit parked at 0 — absolute
-	// offsets double-shift in the first regime.
+	// slides the SECTION's own content instead. The column itself is kept at
+	// the designed reading offset (translateX -65ch — normalized on entry and
+	// guarded by repairState), so sliding the section to x: 0 puts the story
+	// text exactly at the column's reading position in every regime; relative
+	// offsets computed from a parked column would double-shift it.
 	function sectionNaturalX(sec) {
 		return sec.getBoundingClientRect().x - (gsap.getProperty(sec, "x") || 0);
 	}
@@ -212,8 +212,7 @@
 	function storySlideIn() {
 		const sec = document.getElementById("section-det");
 		if (!sec) return;
-		const readingX = document.documentElement.clientWidth - sec.offsetWidth;
-		gsap.to(sec, { duration: 0.3, x: readingX - sectionNaturalX(sec) });
+		gsap.to(sec, { duration: 0.3, x: 0 });
 	}
 	function storySlideHide() {
 		// try-it: push the story text fully off the right edge
@@ -229,6 +228,24 @@
 	}
 	function slideCanvas(tx) {
 		gsap.to("#canvas-wrapper", { duration: 0.3, translateX: tx });
+	}
+
+	function healArticleColumn() {
+		// A page loaded with restored scroll past section-1 pins #article
+		// before the scrub renders, caching translateX 0 — the column then
+		// stays parked off-screen right while the (unpinned) canvas sits at
+		// its shifted reading offset, leaving the right quarter dark. The
+		// scrub owns every scroll position past its range, so snap the
+		// column to its designed -65ch there. Skipped on the hero/scrub
+		// range (the scrub owns it) and in the expanded playground layout.
+		if (get(expandPlayground) || !desktopLayout()) return;
+		if (window.scrollY < 5000) return;
+		const st = ScrollTrigger.getAll().find((t) => t.trigger && t.trigger.id === "section-1");
+		if (st && window.scrollY <= st.end + 100) return;
+		const art = document.getElementById("article");
+		if (!art) return;
+		const ax = gsap.getProperty(art, "translateX") || 0;
+		if (ax > -100) gsap.to(art, { duration: 0.3, translateX: "-65ch" });
 	}
 
 	function applyStep(n) {
@@ -484,6 +501,7 @@
 			if (el) el.classList.toggle("active", n === current);
 		}
 		revealPassedSteps(center);
+		healArticleColumn();
 		if (get(detStep) !== current) applyStep(current);
 		repairState();
 	}
