@@ -12,7 +12,14 @@
 		cameraControls,
 		cameraAutoRotate,
 		sceneMounted,
-		endMatrix
+		endMatrix,
+		show3d,
+		show2d,
+		grid3dToggled,
+		gridToggled,
+		transformedGridToggled,
+		dataToggled,
+		inputVectorToggled
 	} from "$stores";
 	import {
 		detStep,
@@ -268,6 +275,16 @@
 			// before the original's scrub rendered) would leave it off-screen
 			// right with the canvas shifted — normalize to the designed value
 			gsap.to("#article", { duration: 0.3, translateX: "-65ch" });
+			// the story plays on the plain 2D plane: whatever section-2/the
+			// playground left behind (3D grid, point field, input vector)
+			// would clash with the det shapes
+			show3d.set(false);
+			show2d.set(true);
+			grid3dToggled.set(false);
+			gridToggled.set(true);
+			transformedGridToggled.set(false);
+			dataToggled.set(undefined);
+			inputVectorToggled.set(false);
 			if (get(cameraAutoRotate)) cameraAutoRotate.set(false);
 			const cc = get(cameraControls);
 			if (cc) {

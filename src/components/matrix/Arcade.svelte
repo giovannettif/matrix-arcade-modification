@@ -2271,7 +2271,7 @@
 	coords={vectorCoords}
 	color={colorVector}
 	texOpacity={props.vectorTexOpacity}
-	visible={props.xVisible}
+	visible={props.xVisible && $detStep === 0}
 	dim3={props.vectorDim3}
 />
 
@@ -2281,7 +2281,7 @@
 	coords={[0, 0, 0, ...$vectorCoordsSpring]}
 	color={colorVector}
 	tex={false}
-	visible={basisAltProps.vectorVisible}
+	visible={basisAltProps.vectorVisible && $detStep === 0}
 />
 
 <!-- Basis vectors -->
@@ -2293,7 +2293,7 @@
 	scalar={props.xScalar}
 	scalarOpacity={props.xScalarOpacity}
 	scalarAlign={props.xScalarAlign}
-	visible={props.xVisible}
+	visible={props.xVisible && $detStep === 0}
 	dim3={props.xDim3}
 />
 <Vector
@@ -2304,7 +2304,7 @@
 	scalar={props.yScalar}
 	scalarOpacity={props.yScalarOpacity}
 	scalarAlign={props.yScalarAlign}
-	visible={props.yVisible}
+	visible={props.yVisible && $detStep === 0}
 	dim3={props.yDim3}
 />
 <Vector
@@ -2315,7 +2315,7 @@
 	scalar={props.zScalar}
 	scalarOpacity={props.zScalarOpacity}
 	scalarAlign={props.zScalarAlign}
-	visible={props.zVisible}
+	visible={props.zVisible && $detStep === 0}
 	dim3={props.zDim3}
 />
 
@@ -2325,21 +2325,21 @@
 	coords={[0, 0, 0, 1, 0, 0]}
 	color={colorX}
 	tex={false}
-	visible={basisAltProps.xVisible}
+	visible={basisAltProps.xVisible && $detStep === 0}
 />
 <Vector
 	view={transformedView}
 	coords={[0, 0, 0, 0, 1, 0]}
 	color={colorY}
 	tex={false}
-	visible={basisAltProps.yVisible}
+	visible={basisAltProps.yVisible && $detStep === 0}
 />
 <Vector
 	view={transformedView}
 	coords={[0, 0, 0, 0, 0, 1]}
 	color={colorZ}
 	tex={false}
-	visible={basisAltProps.zVisible}
+	visible={basisAltProps.zVisible && $detStep === 0}
 />
 
 <!-- FIXME: Change blending mode of grid? -->
