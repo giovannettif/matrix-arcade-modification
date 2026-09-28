@@ -46,3 +46,38 @@ li:not(:last-child) {
 	padding: 8px;
 	z-index: var(--z-overlay, 1000);
 }
+
+/* Determinant story: hide the original's in-scene vector coordinate labels
+   (VectorTex/scalar spans) while the det story owns the canvas — they linger
+   from the playground chapter and overlap the det shapes top-down */
+body.det-story #canvas-wrapper span.bg-base-300\/50 {
+	display: none !important;
+}
+body.det-story #canvas-wrapper span.whitespace-nowrap {
+	display: none !important;
+}
+
+/* det story in-scene HTML: column labels + the ambiguity callout chip */
+#canvas-wrapper .det-label {
+	font-family: "Chivo Variable", ui-sans-serif, sans-serif;
+	font-size: 13px;
+	font-weight: 700;
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+	white-space: nowrap;
+}
+#canvas-wrapper .det-callout {
+	width: 250px;
+	padding: 10px 14px;
+	background: rgba(13, 13, 24, 0.92);
+	border: 1px solid rgba(241, 250, 140, 0.55);
+	border-radius: 10px;
+	font-family: "Chivo Variable", ui-sans-serif, sans-serif;
+	font-size: 13px;
+	line-height: 1.5;
+	text-align: center;
+	color: #f8f8f2;
+	box-shadow: 0 0 20px rgba(0, 0, 0, 0.45);
+}
+#canvas-wrapper .det-callout b {
+	color: #f1fa8c;
+}

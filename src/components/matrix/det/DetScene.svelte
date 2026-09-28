@@ -229,6 +229,7 @@
 		if (prev === 0 && n >= 1) {
 			// entering the det story: park the site's playground UI, slide the
 			// story text into the reading column, settle the camera top-down
+			document.body.classList.add("det-story");
 			showPlayground.set(false);
 			gsap.set("#inputs", { autoAlpha: 0 });
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
@@ -247,6 +248,7 @@
 		}
 		if (prev >= 1 && n === 0) {
 			// back into the 3D playground section — restore its state
+			document.body.classList.remove("det-story");
 			showPlayground.set(true);
 			gsap.set("#inputs", { autoAlpha: 1 });
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
@@ -370,6 +372,7 @@
 				// resized out of the desktop layout mid-story: clear the try-it
 				// layout without re-enabling the playground UI (the original's
 				// own triggers own that below the lg breakpoint)
+				document.body.classList.remove("det-story");
 				detStep.set(0);
 				endRound();
 				expandPlayground.set(false);
