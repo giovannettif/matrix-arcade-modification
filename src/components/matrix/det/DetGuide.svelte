@@ -83,9 +83,16 @@
 			}
 			parked = false;
 			const r = target.getBoundingClientRect();
-			// prefer the card to the right of the target, arrow pointing left at it
+			// targets live in the left controls panel — place the card to the
+			// RIGHT OF THE WHOLE PANEL so it can never cover the other controls
+			// (beat 1's card sat on top of the Predict buttons, blocking them)
+			const panel = document.querySelector(".fixed.z-40");
+			const pr = panel ? panel.getBoundingClientRect() : null;
 			let left;
-			if (r.right + cardW + 56 < vw) {
+			if (pr && r.left >= pr.left - 4 && r.right <= pr.right + 4 && pr.right + cardW + 40 < vw) {
+				left = pr.right + 24;
+				arrowSide = "left";
+			} else if (r.right + cardW + 56 < vw) {
 				left = r.right + 26;
 				arrowSide = "left";
 			} else {

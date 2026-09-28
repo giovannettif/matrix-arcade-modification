@@ -2359,7 +2359,9 @@
 	<Grid {...transformedGridProps} axes={"xyz"} />
 </T.Group>
 
-<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0 || $detStep === 6}>
+<!-- the 3D grids stay hidden during the whole det story (steps AND try-it):
+     under the try-it's top-down camera they project as diagonal streaks -->
+<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
 	<!-- 3d grid -->
 	<Grid
 		axes={"xzy"}

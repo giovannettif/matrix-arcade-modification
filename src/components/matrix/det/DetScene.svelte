@@ -138,7 +138,12 @@
 	const STORY_SPAN = 4.2;
 	function onCanvasPointerDown(e) {
 		if (get(detGame).status !== "asking") return;
-		const canvas = e.currentTarget;
+		// resolve the canvas at event time: the listener is delegated on the
+		// stable wrapper (see onMount), so e.currentTarget is #canvas-wrapper
+		const canvas = e.currentTarget.querySelector
+			? e.currentTarget.querySelector("canvas")
+			: e.currentTarget;
+		if (!canvas) return;
 		const r = canvas.getBoundingClientRect();
 		guessNdc.set(
 			((e.clientX - r.left) / r.width) * 2 - 1,
@@ -444,14 +449,19 @@
 		mounted = true;
 		window.addEventListener("scroll", detUpdate, { passive: true });
 		window.addEventListener("resize", detUpdate);
-		const canvasEl = document.querySelector("#canvas-wrapper canvas");
-		if (canvasEl) canvasEl.addEventListener("pointerdown", onCanvasPointerDown);
+		// click-to-guess is DELEGATED on #canvas-wrapper: attaching to the
+		// canvas itself races DetScene's mount against Threlte's canvas
+		// creation, and a lost race silently killed the prediction games for
+		// the whole session (found in RUN 30). The wrapper is static DOM and
+		// the canvas is resolved per-event inside the handler.
+		const wrapper = document.getElementById("canvas-wrapper");
+		if (wrapper) wrapper.addEventListener("pointerdown", onCanvasPointerDown);
 		const iv = setInterval(detUpdate, 300);
 		detUpdate();
 		onDestroy(() => {
 			window.removeEventListener("scroll", detUpdate);
 			window.removeEventListener("resize", detUpdate);
-			if (canvasEl) canvasEl.removeEventListener("pointerdown", onCanvasPointerDown);
+			if (wrapper) wrapper.removeEventListener("pointerdown", onCanvasPointerDown);
 			clearInterval(iv);
 		});
 	});
