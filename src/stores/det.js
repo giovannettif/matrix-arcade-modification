@@ -9,7 +9,7 @@ import { gsap } from "$utils/gsap.js";
 
 const IDENTITY = [1, 0, 0, 1];
 
-export const detStep = writable(1); // 1..4, driven by scroll
+export const detStep = writable(0); // 0 = outside the det story, 1..5 story steps, 6 = try-it sandbox
 export const detFrom = writable([...IDENTITY]);
 export const detTarget = writable([...IDENTITY]);
 export const detPlayhead = writable(1); // 1 = resting at target
