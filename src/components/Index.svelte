@@ -20,6 +20,14 @@
 	// Fading at $loaded alone exposed a scrollable, uncalibrated page during
 	// dev hydration — when the pins landed mid-scroll the text jumped.
 	$: if ($mq.lg && $loaded && $sceneMounted) {
+		// Release the shield BEFORE the fade runs: the fade is rAF-driven, so
+		// a stalled render loop would otherwise leave the full-viewport
+		// overlay blocking every click indefinitely (seen in a throttled
+		// environment: opacity frozen mid-fade, page unclickable)
+		gsap.set("#loading-overlay", {
+			pointerEvents: "none"
+		});
+
 		gsap.to("#loading-overlay", {
 			autoAlpha: 0,
 			duration: 2

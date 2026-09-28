@@ -13,11 +13,11 @@
 
 	$: question =
 		g.mode === "forward"
-			? "Click where you think the highlighted point from the unit square lands."
-			: "Click where you think the marked point came from in the original square.";
+			? "Click where the marked point (coordinates shown on the grid) lands after the transformation."
+			: "Click the point in the original unit square that lands on the marked point.";
 
 	function fmt(p) {
-		return p ? `(${p[0].toFixed(1)}, ${p[1].toFixed(1)})` : "";
+		return p ? `(${p[0].toFixed(2)}, ${p[1].toFixed(2)})` : "";
 	}
 </script>
 
@@ -97,6 +97,12 @@
 	}
 	.head {
 		@apply flex flex-wrap items-center justify-between gap-2;
+		/* the head box stretches to the panel's full width; its empty right
+		   half must not swallow canvas clicks meant for the game */
+		pointer-events: none;
+	}
+	.head :global(button) {
+		pointer-events: auto;
 	}
 	.title {
 		@apply flex items-center gap-2 font-sans text-sm font-bold text-base-content;

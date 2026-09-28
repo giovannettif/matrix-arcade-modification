@@ -2416,15 +2416,16 @@
 </T.Mesh> -->
 
 <!-- TODO: Remove objects that are not visible? -->
-<!-- Data — hidden during the det story: the chapter-1 sample dot field buried
-     the det shapes and callouts (user: "a bunch of clutter that hides what
+<!-- Data — the original's chapter-1 dot/vector/plane fields are MATHBOX
+     primitives: {#if}-unmounting strands their WebGL objects in the mathbox
+     scene graph (frozen mid-reveal ghosts, duplicated on every re-mount), so
+     they stay mounted and hide through their own reveal transitions whenever
+     the det story owns the canvas (user: "a bunch of clutter that hides what
      we are trying to explain") -->
-{#if $detStep === 0}
-	<Planes view={transformedView} t={planesProps.t} />
-	<Points view={transformedView} t={pointsProps.t} />
-	<Planes view={transformedView} t={planes3dProps.t} dim3 />
-	<Points view={transformedView} t={points3dProps.t} dim3 />
-{/if}
+<Planes view={transformedView} t={$detStep === 0 ? planesProps.t : 0} />
+<Points view={transformedView} t={$detStep === 0 ? pointsProps.t : 0} />
+<Planes view={transformedView} t={$detStep === 0 ? planes3dProps.t : 0} dim3 />
+<Points view={transformedView} t={$detStep === 0 ? points3dProps.t : 0} dim3 />
 <!-- <Sphere view={transformedView} /> -->
 <!-- <Circle view={transformedView} /> -->
 
@@ -2457,8 +2458,11 @@
 	t={grid3dProps.t}
 />
 
+<!-- mathbox vector lattice — same reveal-driven hiding as the data fields:
+     the original's st-6 scrub leaves enter: 1 / exit: 0 past its range, which
+     would otherwise float the lattice over the det story and try-it -->
 <Vectors
 	view={transformedView}
-	enter={vectorsProps.enter}
-	exit={vectorsProps.exit}
+	enter={$detStep === 0 ? vectorsProps.enter : 0}
+	exit={$detStep === 0 ? vectorsProps.exit : 1}
 />

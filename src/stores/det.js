@@ -121,8 +121,10 @@ const gameIdle = {
 export const detGame = writable({ ...gameIdle });
 
 function randUnit() {
-	// point inside the unit square, away from the edges
-	return Math.round((0.15 + Math.random() * 0.7) * 20) / 20;
+	// point on the 0.25 grid inside the unit square — coarse enough to read
+	// off the grid, fine enough for variety; integer matrices keep every
+	// image on the same grid, so the displayed coordinates are exact
+	return 0.25 * (1 + Math.floor(Math.random() * 3));
 }
 
 function randEntry() {

@@ -131,54 +131,117 @@
 	$: gGuess = g.guess;
 	$: gAnswer = g.result && g.result.answer ? g.result.answer : null;
 	$: gPreimages = g.result && g.result.preimages ? g.result.preimages : null;
+	// where the user's guess actually lands under the round's matrix — the
+	// far end of the reveal connector on inverse rounds (shows the miss
+	// against the still-marked target ring)
+	$: gGuessImage =
+		gGuess && g.result && g.mode === "inverse" && g.round
+			? [
+					g.round.matrix[0] * gGuess[0] + g.round.matrix[1] * gGuess[1],
+					g.round.matrix[2] * gGuess[0] + g.round.matrix[3] * gGuess[1]
+				]
+			: null;
+	// connector from the guess to what it actually maps to (forward: the
+	// answer; inverse: the guess's own image) — the banner references this
+	$: gConnector =
+		g.result && gGuess
+			? g.mode === "forward"
+				? [gGuess, g.result.answer]
+				: gGuessImage
+		: null;
+	// hover ghost: live pointer position on the story plane while a round is
+	// asking — turns blind clicking into aimed plotting
+	let hoverPt = null;
+	$: if (!gAsk && hoverPt) hoverPt = null;
+	// crosshair cursor while a round is asking (cleaned up on destroy below)
+	$: if (typeof document !== "undefined") {
+		document.body.classList.toggle("det-asking", gAsk);
+	}
+	const fmtG = (n) => (Math.round(n * 100) / 100).toFixed(2);
+
+	/* reveal connector: from the guess to where it actually maps */
+	const connectorGeom = new THREE.BufferGeometry();
+	connectorGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+	const connectorMat = new THREE.LineBasicMaterial({ color: RED, transparent: true, opacity: 0.9 });
+	$: writeConnector(gConnector, g.result);
+	function writeConnector(pts, result) {
+		const arr = connectorGeom.attributes.position.array;
+		arr[0] = pts ? pts[0][0] : 0;
+		arr[1] = pts ? pts[0][1] : 0;
+		arr[2] = Z + 0.02;
+		arr[3] = pts ? pts[1][0] : 0;
+		arr[4] = pts ? pts[1][1] : 0;
+		arr[5] = Z + 0.02;
+		connectorGeom.attributes.position.needsUpdate = true;
+		connectorGeom.computeBoundingSphere();
+		if (result) {
+			connectorMat.color.set(
+				result.type === "correct" ? GREEN : result.type === "ambiguous" ? PURPLE : RED
+			);
+		}
+	}
 
 	// click-to-guess: a manual DOM-raycast path rather than Threlte's
 	// on:pointerdown — the app never registered the interactivity plugin, and
 	// its default target (renderer.domElement at plugin-creation time) is not
 	// dependable when called from a child component. clientX/Y + the live
 	// camera make this work for real clicks and automation alike.
-	let clickPlane;
 	const guessRaycaster = new THREE.Raycaster();
 	const guessNdc = new THREE.Vector2();
 	// the det story lives on the z = 0.05 plane within |x|,|y| <= ~4 (grid span)
 	const STORY_Z = 0.05;
 	const STORY_SPAN = 4.2;
-	function onCanvasPointerDown(e) {
-		if (get(detGame).status !== "asking") return;
-		// resolve the canvas at event time: the listener is delegated on the
+	// click position (CSS pixels) → story-plane grid coords via the live
+	// camera. Analytic ray ∩ plane — independent of scene-graph matrix
+	// staleness, which matters when the render loop is throttled. The
+	// clickPlane mesh raycast was dropped: it intersected the same z plane
+	// with identical bounds, just less reliably.
+	function planePointFromEvent(e) {
+		// resolve the canvas at event time: listeners are delegated on the
 		// stable wrapper (see onMount), so e.currentTarget is #canvas-wrapper
-		const canvas = e.currentTarget.querySelector
-			? e.currentTarget.querySelector("canvas")
-			: e.currentTarget;
-		if (!canvas) return;
+		const canvas =
+			e.currentTarget && e.currentTarget.querySelector
+				? e.currentTarget.querySelector("canvas")
+				: e.currentTarget;
+		if (!canvas) return null;
 		const r = canvas.getBoundingClientRect();
 		guessNdc.set(
 			((e.clientX - r.left) / r.width) * 2 - 1,
 			-(((e.clientY - r.top) / r.height) * 2 - 1)
 		);
 		const cc = get(cameraControls);
-		if (!cc || !cc.camera) return;
+		if (!cc || !cc.camera) return null;
+		// the raycast reads camera.matrixWorld — refresh it from the live
+		// position/quaternion so a throttled render loop (which normally
+		// updates matrices per frame) can't serve a stale pose
+		if (cc.camera.updateMatrixWorld) cc.camera.updateMatrixWorld();
 		guessRaycaster.setFromCamera(guessNdc, cc.camera);
-		// mesh raycast first (exact when the plane's world matrix is current)
-		if (clickPlane) {
-			const hits = guessRaycaster.intersectObject(clickPlane, true);
-			if (hits.length) {
-				submitGuess([hits[0].point.x, hits[0].point.y]);
-				return;
-			}
-		}
-		// analytic ray ∩ story-plane fallback — independent of scene-graph
-		// matrix staleness, which matters when the render loop is throttled
 		const o = guessRaycaster.ray.origin;
 		const d = guessRaycaster.ray.direction;
-		if (Math.abs(d.z) < 1e-6) return;
+		if (Math.abs(d.z) < 1e-6) return null;
 		const t = (STORY_Z - o.z) / d.z;
-		if (t <= 0) return;
-		const px = o.x + t * d.x;
-		const py = o.y + t * d.y;
-		if (Math.abs(px) <= STORY_SPAN && Math.abs(py) <= STORY_SPAN) {
-			submitGuess([px, py]);
+		if (t <= 0) return null;
+		// clamp to the story plane instead of rejecting: a click beyond the
+		// plane's edge used to be silently dropped (no guess, no feedback) —
+		// the hover ghost shows the clamped target before the click lands
+		const px = Math.max(-STORY_SPAN, Math.min(STORY_SPAN, o.x + t * d.x));
+		const py = Math.max(-STORY_SPAN, Math.min(STORY_SPAN, o.y + t * d.y));
+		return [px, py];
+	}
+	function onCanvasPointerDown(e) {
+		if (get(detGame).status !== "asking") return;
+		const pt = planePointFromEvent(e);
+		if (pt) submitGuess(pt);
+	}
+	function onCanvasPointerMove(e) {
+		if (get(detGame).status !== "asking") {
+			if (hoverPt) hoverPt = null;
+			return;
 		}
+		hoverPt = planePointFromEvent(e);
+	}
+	function onCanvasPointerLeave() {
+		hoverPt = null;
 	}
 
 	/* step coupling — poll-based (robust in throttled environments) */
@@ -237,6 +300,23 @@
 		gsap.to("#canvas-wrapper", { duration: 0.3, translateX: tx });
 	}
 
+	// assert the top-down story pose and apply it synchronously: the third
+	// argument of rotateTo/dollyTo is enableTransition — with true the pose
+	// only lands in camera-controls' rAF-driven update(), which never runs
+	// in a throttled render loop (background tabs, slow machines), leaving
+	// the camera at the 3D hero pose and skewing the whole sandbox
+	function assertStoryCamera(cc) {
+		cc.rotateTo(0, 0.06, false);
+		cc.dollyTo(15, false);
+		// the original's triggers also leave a shifted look-at target and
+		// focal offset behind — zero them or the sandbox orbits the wrong spot
+		// (the ghost probes read grid (2.9, -3.4) at the viewport center)
+		if (typeof cc.setTarget === "function") cc.setTarget(0, 0, 0, false);
+		if (typeof cc.setFocalOffset === "function") cc.setFocalOffset(0, 0, 0, false);
+		if (typeof cc.update === "function") cc.update(0);
+		if (cc.camera && cc.camera.updateMatrixWorld) cc.camera.updateMatrixWorld();
+	}
+
 	function healArticleColumn() {
 		// A page loaded with restored scroll past section-1 pins #article
 		// before the scrub renders, caching translateX 0 — the column then
@@ -290,8 +370,7 @@
 			if (cc) {
 				savedCamera = { azimuth: cc.azimuthAngle, polar: cc.polarAngle, distance: cc.distance };
 				// polar ~0 is degenerate for the spherical camera, so stop just short
-				cc.rotateTo(0, 0.06, true);
-				cc.dollyTo(15, true);
+				assertStoryCamera(cc);
 			} else {
 				// camera-controls not ready yet (reload straight into the story)
 				cameraPending = true;
@@ -323,6 +402,16 @@
 			// try-it: identity sandbox + the original's expand-playground layout
 			resetToIdentity();
 			endRound();
+			// the try-it is a top-down 2D sandbox, but the original's section
+			// triggers (st-9 "show third dimension") leave a tilted 3D camera
+			// behind when the page is scrolled straight here — assert the story
+			// pose on entry (the pre-story pose is already in savedCamera; the
+			// user can still orbit freely DURING the try-it, repairState's
+			// camera guard only applies at steps ≤ 5)
+			const ccTry = get(cameraControls);
+			if (ccTry) {
+				assertStoryCamera(ccTry);
+			}
 			// the try-it shows the original's transformed grid again (it IS the
 			// playground grid) — reset the original's matrix warp to identity
 			// so a stale playground matrix can't render stray lines behind the
@@ -357,8 +446,7 @@
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
 			const cc = get(cameraControls);
 			if (cc) {
-				cc.rotateTo(0, 0.06, true);
-				cc.dollyTo(15, true);
+				assertStoryCamera(cc);
 			}
 		}
 		const m = STEP_MATRIX[n];
@@ -382,8 +470,7 @@
 						distance: ccEarly.distance
 					};
 				}
-				ccEarly.rotateTo(0, 0.06, true);
-				ccEarly.dollyTo(15, true);
+				assertStoryCamera(ccEarly);
 				cameraPending = false;
 			}
 		}
@@ -426,8 +513,7 @@
 			cc &&
 			(Math.abs(cc.polarAngle - 0.06) > 0.25 || Math.abs(cc.distance - 15) > 0.5)
 		) {
-			cc.rotateTo(0, 0.06, true);
-			cc.dollyTo(15, true);
+			assertStoryCamera(cc);
 		}
 	}
 
@@ -451,8 +537,7 @@
 	}
 
 	function detUpdate() {
-		if (!mounted) return;
-		// the original site is desktop-only: below the lg breakpoint the article
+		if (!mounted) return;		// the original site is desktop-only: below the lg breakpoint the article
 		// is display:none and Title shows its "better viewed on desktop" notice.
 		// The hidden det section's rects all read 0 there, which would slam
 		// detStep to 6 and float the try-it overlay over that notice — so the
@@ -523,23 +608,47 @@
 		repairState();
 	}
 
+	let scrubCatchup = null;
+	function scheduleScrubCatchup() {
+		// the original's pin eases with scrub: 1 — the det sections' screen
+		// positions keep drifting for ~1s AFTER a scroll event, so a single
+		// detUpdate at event time can sample a pre-settle position. One
+		// trailing re-check per scroll burst closes that gap (the interval
+		// alone can be throttled on slow machines).
+		if (scrubCatchup) clearTimeout(scrubCatchup);
+		scrubCatchup = setTimeout(detUpdate, 550);
+	}
+
 	onMount(() => {
 		mounted = true;
 		window.addEventListener("scroll", detUpdate, { passive: true });
+		window.addEventListener("scroll", scheduleScrubCatchup, { passive: true });
 		window.addEventListener("resize", detUpdate);
-		// click-to-guess is DELEGATED on #canvas-wrapper: attaching to the
-		// canvas itself races DetScene's mount against Threlte's canvas
-		// creation, and a lost race silently killed the prediction games for
-		// the whole session (found in RUN 30). The wrapper is static DOM and
-		// the canvas is resolved per-event inside the handler.
+		// click-to-guess and the hover ghost are DELEGATED on #canvas-wrapper:
+		// attaching to the canvas itself races DetScene's mount against
+		// Threlte's canvas creation, and a lost race silently killed the
+		// prediction games for the whole session (found in RUN 30). The
+		// wrapper is static DOM and the canvas is resolved per-event inside
+		// the handlers.
 		const wrapper = document.getElementById("canvas-wrapper");
-		if (wrapper) wrapper.addEventListener("pointerdown", onCanvasPointerDown);
+		if (wrapper) {
+			wrapper.addEventListener("pointerdown", onCanvasPointerDown);
+			wrapper.addEventListener("pointermove", onCanvasPointerMove);
+			wrapper.addEventListener("pointerleave", onCanvasPointerLeave);
+		}
 		const iv = setInterval(detUpdate, 300);
 		detUpdate();
 		onDestroy(() => {
 			window.removeEventListener("scroll", detUpdate);
+			window.removeEventListener("scroll", scheduleScrubCatchup);
 			window.removeEventListener("resize", detUpdate);
-			if (wrapper) wrapper.removeEventListener("pointerdown", onCanvasPointerDown);
+			if (scrubCatchup) clearTimeout(scrubCatchup);
+			if (wrapper) {
+				wrapper.removeEventListener("pointerdown", onCanvasPointerDown);
+				wrapper.removeEventListener("pointermove", onCanvasPointerMove);
+				wrapper.removeEventListener("pointerleave", onCanvasPointerLeave);
+			}
+			document.body.classList.remove("det-asking");
 			clearInterval(iv);
 		});
 	});
@@ -608,16 +717,57 @@
 	{/if}
 
 	<!-- game markers -->
-	{#if gAsk && gPoint}
+	<!-- the round's reference point: the marked origin (forward) or the marked
+	     image (inverse). Kept through the reveal — the result strip references
+	     it, and the coordinate chip makes the round solvable by math rather
+	     than by pixel-hunting -->
+	{#if g.round && gPoint}
 		<T is={THREE.Mesh} position={[gPoint[0], gPoint[1], 0.12]}>
 			<torusGeometry args={[0.11, 0.02, 8, 32]} />
 			<meshBasicMaterial color={YELLOW} />
 		</T>
+		<HTML position={[gPoint[0], gPoint[1] + 0.44, 0.4]} center>
+			<span class="det-chip">({fmtG(gPoint[0])}, {fmtG(gPoint[1])})</span>
+		</HTML>
+	{/if}
+	<!-- hover ghost: where the click would land right now (asking rounds) -->
+	{#if gAsk && hoverPt}
+		<T is={THREE.Mesh} position={[hoverPt[0], hoverPt[1], 0.11]}>
+			<torusGeometry args={[0.07, 0.014, 8, 32]} />
+			<meshBasicMaterial color={"#f8f8f2"} transparent opacity={0.85} />
+		</T>
+		<HTML position={[hoverPt[0], hoverPt[1] + 0.32, 0.4]} center>
+			<span class="det-chip">({fmtG(hoverPt[0])}, {fmtG(hoverPt[1])})</span>
+		</HTML>
 	{/if}
 	{#if gGuess}
 		<T is={THREE.Mesh} position={[gGuess[0], gGuess[1], 0.12]}>
 			<torusGeometry args={[0.08, 0.02, 8, 32]} />
-			<meshBasicMaterial color={g.result ? (g.result.type === "correct" ? GREEN : RED) : "#f8f8f2"} />
+			<meshBasicMaterial
+				color={g.result
+					? g.result.type === "correct"
+						? GREEN
+						: g.result.type === "ambiguous"
+							? PURPLE
+							: RED
+					: "#f8f8f2"}
+			/>
+		</T>
+	{/if}
+	<!-- connector: guess → what it actually maps to -->
+	{#if gConnector}
+		<T is={THREE.Line} geometry={connectorGeom} material={connectorMat} />
+	{/if}
+	{#if gGuessImage}
+		<T is={THREE.Mesh} position={[gGuessImage[0], gGuessImage[1], 0.12]}>
+			<sphereGeometry args={[0.05, 12, 12]} />
+			<meshBasicMaterial
+				color={g.result && g.result.type === "correct"
+					? GREEN
+					: g.result && g.result.type === "ambiguous"
+						? PURPLE
+						: RED}
+			/>
 		</T>
 	{/if}
 	{#if gAnswer && g.result && g.result.type !== "ambiguous"}
@@ -635,11 +785,6 @@
 		{/each}
 	{/if}
 
-	<!-- click plane for the prediction games (asking rounds only) -->
-	{#if gAsk}
-		<T is={THREE.Mesh} bind:ref={clickPlane}>
-			<planeGeometry args={[8.4, 8.4]} />
-			<meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-		</T>
-	{/if}
+	<!-- guess clicks land anywhere on the canvas: the pointer handler resolves
+	     them analytically onto the story plane — no invisible mesh needed -->
 {/if}

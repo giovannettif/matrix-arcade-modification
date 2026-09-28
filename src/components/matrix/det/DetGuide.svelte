@@ -82,27 +82,16 @@
 				return;
 			}
 			parked = false;
-			const r = target.getBoundingClientRect();
-			// targets live in the left controls panel — place the card to the
-			// RIGHT OF THE WHOLE PANEL so it can never cover the other controls
-			// (beat 1's card sat on top of the Predict buttons, blocking them)
-			const panel = document.querySelector(".fixed.z-40");
-			const pr = panel ? panel.getBoundingClientRect() : null;
-			let left;
-			if (pr && r.left >= pr.left - 4 && r.right <= pr.right + 4 && pr.right + cardW + 40 < vw) {
-				left = pr.right + 24;
-				arrowSide = "left";
-			} else if (r.right + cardW + 56 < vw) {
-				left = r.right + 26;
-				arrowSide = "left";
-			} else {
-				left = Math.max(12, r.left - cardW - 26);
-				arrowSide = "right";
-			}
-			const centerY = r.top + r.height / 2;
-			const top = Math.min(Math.max(centerY - cardH / 2, 12), vh - cardH - 12);
-			arrowTop = Math.min(Math.max(centerY - top, 18), cardH - 18);
-			moveTo(left, top);
+			// The beats' targets all live in the fixed left panel, so placing
+			// the card "right of the panel" put it mid-canvas — over the game
+			// area, where it intercepted guess clicks (found by playing a
+			// round). The viewport's top-right is clear of the story plane
+			// (the plane's right edge sits near the canvas center + 4.2 grid
+			// units), so the card can't cover playable ground there.
+			const top = Math.min(96, vh - cardH - 12);
+			moveTo(vw - cardW - 24, top);
+			arrowSide = "left";
+			arrowTop = Math.round(cardH / 2);
 		} catch (e) {
 			// placement is best-effort; a failed beat keeps the last position
 		}

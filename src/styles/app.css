@@ -81,3 +81,33 @@ body.det-story #canvas-wrapper span.whitespace-nowrap {
 #canvas-wrapper .det-callout b {
 	color: #f1fa8c;
 }
+
+/* coordinate chip for the prediction games: the marked point's coordinates,
+   the hover ghost's live readout — never intercepts pointer events */
+#canvas-wrapper .det-chip {
+	padding: 2px 8px;
+	background: rgba(13, 13, 24, 0.92);
+	border: 1px solid rgba(248, 248, 242, 0.35);
+	border-radius: 8px;
+	font-family: "Chivo Variable", ui-sans-serif, sans-serif;
+	font-size: 12px;
+	font-weight: 700;
+	color: #f8f8f2;
+	white-space: nowrap;
+	pointer-events: none;
+	user-select: none;
+}
+
+/* crosshair while a prediction round is asking: the canvas is clickable */
+body.det-asking #canvas-wrapper {
+	cursor: crosshair;
+}
+
+/* The hero title fades out via an ancestor's opacity but keeps hit-testing:
+   its 944×384 box silently swallows canvas clicks across the try-it's prime
+   answer zone (upstream quirk — the original's playground has it too). The
+   title has no interactive elements by the time the det story runs, so let
+   clicks fall through there. */
+body.det-story #title {
+	pointer-events: none;
+}
