@@ -19,6 +19,26 @@ export const detGuideStep = writable(0); // guided walkthrough beat (0..3)
 export const detGuideCollapsed = writable(false);
 export const detResetTick = writable(0); // bumped whenever entries snap (reset)
 
+/**
+ * Presentation scalars shared between the step engine (DetEngine, DOM-level)
+ * and the in-canvas visuals (DetScene). The engine tweens these; DetScene
+ * reads them reactively — the split keeps the whole story engine alive even
+ * on loads where the WebGL canvas never initializes (RUN 48, G-A).
+ */
+export const detFx = writable({
+	storyReveal: 0, // 0 = shapes hidden, 1 = fully revealed (entry/exit cinematic)
+	stepInT: 1, // arrows/labels/spheres entrance (group scale + label fade)
+	edgeDrawT: 1, // edge draw-on progress (0 = no edges, 1 = full loop)
+	fillT: 0, // 0 = cyan, 1 = pink
+	collapsedT: 0, // 0 = fill visible, 1 = collapsed (fill faded out)
+	imgT: 0, // image spheres + ambiguity callout fade
+	hoverPt: null // hover ghost position on the story plane while asking
+});
+
+export function setDetFx(patch) {
+	detFx.update((o) => ({ ...o, ...patch }));
+}
+
 export const detEntries = derived(
 	[detFrom, detTarget, detPlayhead],
 	([f, t, p]) => f.map((v, i) => v + (t[i] - v) * p)

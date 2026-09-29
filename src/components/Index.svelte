@@ -9,8 +9,9 @@
 	import TogglePlayground from "./matrix/TogglePlayground.svelte";
 	import { loaded, sceneMounted } from "$stores";
 	import { gsap, ScrollTrigger } from "$utils/gsap.js";
-	import Footer from "./matrix/Footer.svelte";
-	import DetOverlay from "./matrix/det/DetOverlay.svelte";
+import Footer from "./matrix/Footer.svelte";
+import DetOverlay from "./matrix/det/DetOverlay.svelte";
+import DetEngine from "./matrix/det/DetEngine.svelte";
 	import mq from "$stores/mq.js";
 	import { RingLoader } from "svelte-loading-spinners";
 	import { colorVector } from "$data/variables";
@@ -42,6 +43,14 @@
 	}
 </script>
 
+<!-- CS375 modification: determinant try-it overlay (the story text lives in Article.svelte).
+     DetEngine is the step machine at DOM level (RUN 48, G-A): on loads where the WebGL
+     canvas init throws, Svelte's mount flush aborts and everything AFTER <Threlte/>
+     never mounts — so the engine and the overlay mount BEFORE the canvas, keeping the
+     det story + games alive even on a dead-canvas load. -->
+<DetEngine />
+<DetOverlay />
+
 {#if !$debug}
 	<Title />
 {/if}
@@ -72,8 +81,9 @@
 	<Article />
 </article>
 
-<!-- CS375 modification: determinant try-it overlay (the story text lives in Article.svelte) -->
-<DetOverlay />
+<!-- CS375: DetEngine + DetOverlay moved ABOVE the canvas — see the note at the
+     top of this template (RUN 48, G-A: a canvas mount throw aborts Svelte's
+     mount flush, so anything after <Threlte/> would never mount) -->
 <!-- {/if} -->
 
 {#if $showPlayground}
