@@ -36,6 +36,7 @@
 		detCollapsed,
 		detGame,
 		detApproached,
+		detRegionNear,
 		setDetTarget,
 		skipDet,
 		detTweenActive,
@@ -689,12 +690,17 @@
 				footerElX &&
 				window.innerHeight + window.scrollY >
 					footerElX.getBoundingClientRect().top + window.scrollY + window.innerHeight * 0.55;
-			if (!atFooterCover) {
+			// fire 107: when the exit is the 3D story taking over (det3dStep 1-5,
+			// the fast-transit race), the playground chrome must stay parked —
+			// restoring it here floated the original's toggle bar + matrix panel
+			// + basis vectors over the 3D chapter's cube (measured live)
+			const det3dTookOver = get(det3dStep) >= 1 && get(det3dStep) <= 5;
+			if (!atFooterCover && !det3dTookOver) {
 				showPlayground.set(true);
 				gsap.set("#inputs", { autoAlpha: 1 });
 			}
 			gsap.set("#canvas-wrapper", { pointerEvents: "none" });
-			if (!atFooterCover) {
+			if (!atFooterCover && !det3dTookOver) {
 				expandPlayground.set(savedExpand);
 				slideCanvas(savedExpand ? "0" : "-32.5ch");
 				// TogglePlayground is unmounted while the story runs (its mount
@@ -708,7 +714,10 @@
 			storySlideRestore();
 			savedExpand = false;
 			const cc = get(cameraControls);
-			if (cc && savedCamera) {
+			// fire 107: when the 3D story took over, ITS entry glide owns the
+			// camera (house pose) — the 2D restore glide would fight it for the
+			// whole second; savedCamera hands over to the 3D engine's own capture
+			if (!(get(det3dStep) >= 1 && get(det3dStep) <= 5) && cc && savedCamera) {
 				const restore = savedCamera;
 				storyTl = gsap.timeline();
 				storyTl.to(
@@ -1358,6 +1367,21 @@
 
 	function detUpdate() {
 		if (!mounted) return;
+		// fire 107: the wheel-gate signal — true while the det column intersects
+		// the viewport (Scene hands the wheel to the page scroll there; see
+		// detRegionNear in $stores/det.js). Runs before every early return so
+		// the flag never freezes stale.
+		{
+			const col = document.getElementById("det-article");
+			if (!desktopLayout()) {
+				detRegionNear.set(false);
+			} else if (col) {
+				const r = col.getBoundingClientRect();
+				detRegionNear.set(r.top < window.innerHeight && r.bottom > 0);
+			} else {
+				detRegionNear.set(false);
+			}
+		}
 		// the original site is desktop-only: below the lg breakpoint the article
 		// is display:none and Title shows its "better viewed on desktop" notice.
 		// The hidden det section's rects all read 0 there, which would slam
@@ -1520,8 +1544,17 @@
 			// fire 104 (F5, the mirror of the 3D yield): once the 3D story is
 		// engaged (det3dStep 1-5) the 2D try-it screen releases — the user's
 		// "2D try-it shows instead of the 3D grid" was this hold crossing the
-		// whole 3D chapter
-		if (get(det3dStep) >= 1 && get(det3dStep) <= 5 && get(detStep) === 6) {
+		// whole 3D chapter.
+		// fire 107: the same release must cover detStep 1-5 — a fast transit
+		// can cross into the 3D chapter before any 2D poll sampled the try-it
+		// window (detStep still 5), leaving the 2D story's step-5 world
+		// mounted under the 3D cube (measured live: the 2D collapsed square +
+		// HUD rendered through the 3D chapter's first hold). applyStep(0) is
+		// the full 2D exit (shapes fade, camera hand-off). The force is
+		// UNCONDITIONAL on detStep: gated on >= 1 the exit completed, the
+		// span derivation re-engaged 5 and the story flapped 0->5 every poll
+		// (measured: setDetTarget([1,2,2,4]) rewritten every ~300ms).
+		if (get(det3dStep) >= 1 && get(det3dStep) <= 5) {
 			current = 0;
 		}
 		// fire 91 (adv-10 finding): on collapsed calibrations the +0.55vh

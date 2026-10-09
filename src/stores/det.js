@@ -51,6 +51,13 @@ export const detTryExpanded = writable(true);
  *  read it so the intro clears to just the grid + the e1/e2 construction. */
 export const detApproached = writable(false);
 
+/** fire 107: true while the det column intersects the viewport at all — the
+ *  wheel-gate signal for Scene's camera-controls. The approach zone begins
+ *  before detApproached flips, and camera-controls' default wheel action
+ *  preventDefaults every wheel over the canvas, dead-scrolling the whole
+ *  approach. Set by DetEngine's poll. */
+export const detRegionNear = writable(false);
+
 export const detEntries = derived(
 	[detFrom, detTarget, detPlayhead],
 	([f, t, p]) => f.map((v, i) => v + (t[i] - v) * p)

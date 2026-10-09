@@ -153,16 +153,32 @@ export function lockDetSpacerHeights() {
 	// measure the NATURAL height, then re-lock (one synchronous pass; a
 	// mid-engage transient can at worst record a too-small lock, which is
 	// harmless — only too-tall locks were destructive).
+	// fire 107 (the teleport mechanism): while the pins are LIVE the lock is
+	// MONOTONIC — a fast transit through the 19+10 station pins makes ST's
+	// spacer bookkeeping DROP padding (measured live: the original's spacer
+	// fell 19000 -> 1000, docH 59746 -> 35246) and Chrome then clamps the
+	// scroll into the shrunken document — the user's "teleports me back to
+	// the start of the determinant section". Clear-then-measure re-recorded
+	// the collapsed box as the new truth (the ratchet), baking the clamp in.
+	// While pins own the page the lock only ever holds or raises; legitimate
+	// shrink paths (teardowns) clear the locks first (killDetPins). With the
+	// 3D family at pinSpacing:false the det spacer's size no longer changes
+	// while pins are live, so a too-tall lock has no live producer left.
 	for (const s of spacers) s.style.minHeight = "";
 	for (const s of spacers) {
-		const h = s.getBoundingClientRect().height;
-		if (h > 0) s.style.minHeight = `${Math.round(h)}px`;
+		const prev = parseFloat(s.dataset.detMinLock || "0");
+		const h = Math.max(prev, s.getBoundingClientRect().height);
+		if (h > 0) {
+			s.dataset.detMinLock = String(Math.round(h));
+			s.style.minHeight = `${Math.round(h)}px`;
+		}
 	}
 }
 export function clearDetSpacerLocks() {
 	if (typeof window === "undefined") return;
 	for (const s of document.querySelectorAll(".pin-spacer")) {
 		s.style.minHeight = "";
+		delete s.dataset.detMinLock;
 	}
 }
 let spacersLockArmed = false;
@@ -336,23 +352,30 @@ export function assertDetReleased() {
 // The deferral inside still guards the viewport position; the polls simply
 // re-attempt until it passes. Creation is idempotent (no-ops when created
 // or session-disabled).
+// fire 107: the deep-link family skips are GONE — a load restored past a
+// section used to skip that family for the whole session, so its story had
+// no holds and compressed to a fast-forward glimpse (the "glimpse of cube
+// then the end" report). Shared-spacer spacing lands entirely BELOW the
+// pinned column (measured: one spacer, pad-bottom only), so creating under
+// the user shifts nothing above the viewport. Creation keeps the original's
+// PROVEN animate()-batch timing: a settle-gated late creation landed ~1s
+// after the batch and its forced recalibration stripped the ORIGINAL's own
+// spacer padding mid-scroll (measured live: 19000 -> 1000, docH 59746 ->
+// 35246, Chrome clamped the scroll — the "teleports me back" report).
 export function createDetPins() {
 	if (get(detPinsLive) || pinsDisabled || typeof window === "undefined") return;
-	const vh = window.innerHeight;
-	// deep links past a section skip THAT family for the session (creating
-	// under the user is the fire-92 shift-the-content failure)
+	// fire 107 (the user's "3D section invisible / glimpse of cube then the end"
+	// + "teleports back to the det start"): the old deep-link guards SKIPPED a
+	// family forever when the load restored past its section — the story then
+	// had no holds and compressed to a fast-forward glimpse. Shared-spacer
+	// spacing lands entirely BELOW the pinned column (measured: one spacer,
+	// pad-bottom only), so creating under the user shifts nothing above the
+	// viewport — and the retry path's docH settle gate already guards the
+	// fire-92 mid-cascade failure this guard was written for.
 	const secDet = document.getElementById("section-det");
 	const sec3 = document.getElementById("section-det3d");
-	let created2D = true;
-	let created3D = true;
-	if (secDet && window.scrollY + vh > secDet.getBoundingClientRect().top + window.scrollY + 100) {
-		created2D = false;
-	}
-	if (spans3Disabled) {
-		created3D = false;
-	} else if (sec3 && window.scrollY + vh > sec3.getBoundingClientRect().top + window.scrollY + 100) {
-		created3D = false;
-	}
+	let created2D = !!secDet;
+	let created3D = !!sec3 && !spans3Disabled;
 	// the reading shift must be in place BEFORE the triggers' first refresh —
 	// that refresh is what bakes the fixed pin's `left`
 	assertDetReadingShift();
@@ -403,60 +426,29 @@ export function createDetPins() {
 		}
 	}
 	if (created3D) {
-		for (let n = 1; n <= 5; n++) {
-			const el = document.getElementById(`det3d-st-${n}`);
-			if (!el) continue;
-			const prev = n === 1 ? STEP3_MATRIX[1] : STEP3_MATRIX[n - 1];
-			const cur = STEP3_MATRIX[n];
-			const proxy = { t: n === 1 ? 1 : 0 };
-			const tl = gsap.timeline({
-				scrollTrigger: {
-					trigger: el,
-					start: "center center",
-					// fire 104 (the user: the animations get cut before the text switches):
-					// 1300px of hold per station — the beat animations need the room
-					end: "+=1300",
-					// fire 100: OUR container, not #article — 23 pins of one element
-					// corrupted the page's calibration in every timing (81/92/93);
-					// distinct pinned elements are the supported pattern
-					pin: "#det-article",
-					pinnedContainer: "#det-article",
-					// fire 101 (the footer-overlap finding): ST was auto-picking
-					// transform-pinning and left a constant translateY 5000 on the
-					// container after span 5 released — the held text floated over
-					// the footer. The sibling chain has no transformed ancestors,
-					// so force the stable fixed pin type.
-					pinType: "fixed",
-					// fire 100 iterate: #det-article is now a SIBLING of #article (its own
-					// column) — no transformed ancestor, so the default fixed pinType applies
-					pinSpacing: true,
-					scrub: 1,
-					fastScrollEnd: true,
-					toggleClass: "active",
-					invalidateOnRefresh: true,
-					// fire 103: the 2D twin's hooks — same element, same fix
-					onRefreshInit: assertDetReadingShift,
-					onRefresh: assertDetReadingShift,
-					onToggle: assertDetReadingShift
-				}
-			});
-			tl.to(proxy, {
-				t: 1,
-				ease: "none",
-				onUpdate: () => {
-					// fire 100: the active-span gate (the 2D twin, see above)
-					// fire 105: window test against rAF-stale isActive
-					const trig = tl.scrollTrigger;
-					const y = window.scrollY;
-					if (!trig.isActive && !(y >= trig.start && y <= trig.end)) return;
-					det3ScrubTo(prev, cur, proxy.t);
-				}
-			}, 0);
-			stationTriggers3D.push(tl.scrollTrigger);
-			stationTls3D.push(tl);
+		// fire 107: a load restored INSIDE a 2D span makes the 2D family's first
+		// trigger pin the column SYNCHRONOUSLY in its constructor (ST refreshes
+		// each new trigger at creation) — creating the 3D family right after
+		// then measures its windows inside the fixed hold (measured live: start
+		// 0 / end NaN, the story dead or jumping straight to step 5). Defer to
+		// the engines' poll heal (the footer-band recreate), which waits for an
+		// unpinned moment.
+		const colEl0 = document.getElementById("det-article");
+		const colPinned0 = colEl0 && getComputedStyle(colEl0).position === "fixed";
+		if (!colPinned0) {
+			create3DSpanTriggers();
 		}
 	}
 	if (!stationTriggers2D.length && !stationTriggers3D.length) return;
+	// DEV-only QA surface: deterministic ScrollTrigger access for automation
+	// (the module has no window global; the fire-107 stale-window heal needed
+	// a reproducible refresh handle). Stripped from builds.
+	if (import.meta.env.DEV) {
+		window.__detpins = {
+			refresh: () => ScrollTrigger.refresh(),
+			spans: pinsSnapshot
+		};
+	}
 	// fire 101 iterate: an end-clamp here was REVERTED — every ScrollTrigger
 	// refresh recomputes end from the "+=1000" config (undoing the clamp) and
 	// re-shortening it after each refresh made the spacers oscillate, which
@@ -479,9 +471,110 @@ export function createDetPins() {
 	watchHealth(document.documentElement.scrollHeight);
 }
 
+// fire 107: the 3D family's five pin+scrub spans, extracted so the stale-span
+// watchdog can RE-CREATE them (recreate3DSpans) instead of killing the family
+// for the session. pinSpacing is false (the runway div owns the scroll room),
+// so re-creation touches no spacer geometry and needs no refresh — the new
+// triggers measure their windows against the CURRENT layout, which is what
+// heals the frozen-shallow-window failure.
+function create3DSpanTriggers() {
+	for (let n = 1; n <= 5; n++) {
+		const el = document.getElementById(`det3d-st-${n}`);
+		if (!el) continue;
+		const prev = n === 1 ? STEP3_MATRIX[1] : STEP3_MATRIX[n - 1];
+		const cur = STEP3_MATRIX[n];
+		const proxy = { t: n === 1 ? 1 : 0 };
+		const tl = gsap.timeline({
+			scrollTrigger: {
+				trigger: el,
+				start: "center center",
+				// fire 104 (the user: the animations get cut before the text switches):
+				// 1300px of hold per station — the beat animations need the room
+				end: "+=1300",
+				// fire 100: OUR container, not #article — 23 pins of one element
+				// corrupted the page's calibration in every timing (81/92/93);
+				// distinct pinned elements are the supported pattern
+				pin: "#det-article",
+				pinnedContainer: "#det-article",
+				// fire 101 (the footer-overlap finding): ST was auto-picking
+				// transform-pinning and left a constant translateY 5000 on the
+				// container after span 5 released — the held text floated over
+				// the footer. The sibling chain has no transformed ancestors,
+				// so force the stable fixed pin type.
+				pinType: "fixed",
+				// fire 100 iterate: #det-article is now a SIBLING of #article (its own
+				// column) — no transformed ancestor, so the default fixed pinType applies
+				// fire 107 (the docH shrink): both families' spacing rode ONE shared
+				// spacer, and each family's refresh re-applied the pad-bottom as its
+				// OWN total — the other family's 6500px vanished mid-session (measured
+				// live: docH 60034 -> 53246 while the user scrolled), clipping the 3D
+				// try-it against the footer rule. Only the 2D family uses ST spacing
+				// now; the 3D family's scroll room is the explicit runway div that
+				// follows #det-article (Article.svelte).
+				pinSpacing: false,
+				scrub: 1,
+				fastScrollEnd: true,
+				toggleClass: "active",
+				invalidateOnRefresh: true,
+				// fire 103: the 2D twin's hooks — same element, same fix
+				onRefreshInit: assertDetReadingShift,
+				onRefresh: assertDetReadingShift,
+				onToggle: assertDetReadingShift
+			}
+		});
+		tl.to(proxy, {
+			t: 1,
+			ease: "none",
+			onUpdate: () => {
+				// fire 100: the active-span gate (the 2D twin, see above)
+				// fire 105: window test against rAF-stale isActive
+				const trig = tl.scrollTrigger;
+				const y = window.scrollY;
+				if (!trig.isActive && !(y >= trig.start && y <= trig.end)) return;
+				det3ScrubTo(prev, cur, proxy.t);
+			}
+		}, 0);
+		stationTriggers3D.push(tl.scrollTrigger);
+		stationTls3D.push(tl);
+	}
+}
+
+// fire 107 (the fire-104 disconnect, the user's "glitchy" 2D/3D fight): the
+// 3D spans' windows can freeze on a stale layout (refresh-robust — measured:
+// even a forced ScrollTrigger.refresh() left them at 26104 while det3d-st-1
+// actually sat at 37784), engaging the 3D dock/story thousands of pixels
+// early. Recreating the spans measures fresh windows against the settled
+// layout — no refresh, no spacer churn, no rect-machine fallback, and the
+// scroll position never moves.
+export function recreate3DSpans() {
+	if (typeof window === "undefined") return;
+	for (const tl of stationTls3D) {
+		if (tl) tl.kill();
+	}
+	stationTls3D = [];
+	stationTriggers3D = [];
+	create3DSpanTriggers();
+	if (get(detPinsLive)) lockDetSpacerHeights();
+}
+
 // collapse OR scroll-flow detachment within 2s of creation -> tear down and
 // fall back to the rect machines for the session (the fire-81/92 failure
-// modes recover instead of stranding the page)
+// modes recover instead of stranding the page).
+// fire 107: the teardown calls ScrollTrigger.refresh() after dropping ~13k of
+// spacer padding — with the user INSIDE the det region that refresh yanks the
+// scroll (the "teleports me back to the start of the determinant section"
+// report), so a mid-region failure is LOGGED and left live instead: degraded
+// holds beat a scroll jump, and the engines' rect cross-checks keep the story
+// state sane. Only a user still ABOVE the region gets the clean teardown.
+export function userAboveDetRegion() {
+	if (typeof window === "undefined") return true;
+	const vh = window.innerHeight;
+	const secDet = document.getElementById("section-det");
+	const sec3 = document.getElementById("section-det3d");
+	const detTop = secDet ? secDet.getBoundingClientRect().top : Infinity;
+	const sec3Top = sec3 ? sec3.getBoundingClientRect().top : Infinity;
+	return Math.min(detTop, sec3Top) > vh;
+}
 function watchHealth(before) {
 	if (typeof window === "undefined") return;
 	setTimeout(() => {
@@ -496,6 +589,14 @@ function watchHealth(before) {
 					footer.offsetHeight +
 					window.innerHeight * 2;
 		if (after < before * 0.8 || detached) {
+			if (!userAboveDetRegion()) {
+				console.error(
+					"[detPins] the station pins " +
+						(detached ? "detached the scroll flow" : "collapsed the document") +
+						" but the user is inside the det region — leaving them live (teardown would teleport the scroll)"
+				);
+				return;
+			}
 			console.error(
 				"[detPins] the station pins " +
 					(detached ? "detached the scroll flow" : "collapsed the document") +

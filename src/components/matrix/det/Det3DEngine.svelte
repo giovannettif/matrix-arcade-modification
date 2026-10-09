@@ -40,20 +40,22 @@
 	// the story's matrices — same arc as the 2D beats (F12: the scene renders
 	// whatever the entries say; the engine owns pushing these per step)
 	// fire 93: canonical in $stores/detPins.js (the pin scrubs read the same objects)
-	import {
-		STEP3_MATRIX,
-		pinsLive as stationPinsLive3,
-		inDetSpan3 as stationInSpan3,
-		triggerCurrent3 as stationTriggerCurrent3,
-		killDetPins,
-		lastSpanEnd3,
-		retryCreateDetPins,
-		kill3DSpans,
-		detPinsSpans3,
-		pins3Live as pins3LiveRaw,
-		assertDetReadingShift,
-		assertDetReleased
-	} from "$stores/detPins.js";
+import {
+	STEP3_MATRIX,
+	pinsLive as stationPinsLive3,
+	inDetSpan3 as stationInSpan3,
+	triggerCurrent3 as stationTriggerCurrent3,
+	killDetPins,
+	lastSpanEnd3,
+	retryCreateDetPins,
+	kill3DSpans,
+	recreate3DSpans,
+	detPinsSpans3,
+	pins3Live as pins3LiveRaw,
+	assertDetReadingShift,
+	assertDetReleased,
+	userAboveDetRegion
+} from "$stores/detPins.js";
 
 	let mounted = false;
 	let destroyed = false;
@@ -345,6 +347,14 @@
 		return detPinsSpans3();
 	}
 	let stale3Polls = 0;
+	// fire 107: re-creation budget for the stale-span watchdog — two heals,
+	// then the kill fallback; decayed after 100 healthy polls so a one-off
+	// mid-load transient never consumes the budget for the whole session
+	let recreateAttempts3 = 0;
+	let healthy3Polls = 0;
+	// fire 107: the footer-band heal's own session budget (the watchdog's
+	// decay logic doesn't apply — a layout that re-freezes twice stays broken)
+	let bandHealAttempts3 = 0;
 	function killStationPins3() {
 		killDetPins();
 	}
@@ -375,6 +385,34 @@
 		// fire 101: the pin retry (the 2D twin) — re-attempt deferred creation
 		try {
 			retryCreateDetPins();
+		} catch (e) {}
+		// fire 107: deterministic stale-window heal — creation racing the layout
+		// cascade (or landing while the column is already mid-pin on a restored
+		// load) can freeze the 3D spans' windows shallow or DEAD (measured live:
+		// spans3 at 26104 while det3d-st-1 actually sat at 37784, and start 0 /
+		// end NaN after a mid-pin re-create), engaging the 3D story/dock in the
+		// wrong place or not at all. The windows are refresh-robust (a forced
+		// ScrollTrigger.refresh() healed nothing), so RE-CREATE them: fresh
+		// triggers measure the settled layout, no refresh, the scroll never
+		// moves. Two guards: the column must NOT be pinned right now (measuring
+		// inside a fixed hold is what produced the dead windows), and NaN ends
+		// count as out-of-band. Sanity band = the engine's own footer-relative
+		// anchorOk tolerance (release before the footer, but not absurdly deep).
+		try {
+			if (stationPinsLive3() && bandHealAttempts3 < 4) {
+				const lastEnd = lastSpanEnd3();
+				const footerEl = document.querySelector("footer");
+				const colNow = document.getElementById("det-article");
+				const colPinned = colNow && getComputedStyle(colNow).position === "fixed";
+				if (!colPinned && footerEl) {
+					const ft = footerEl.getBoundingClientRect().top + window.scrollY;
+					if (!Number.isFinite(lastEnd) || lastEnd > ft - 200 || lastEnd < ft - 8000) {
+						bandHealAttempts3++;
+						console.error("[det3] the 3D span windows are outside the footer-relative sanity band — recreating them against the settled layout");
+						recreate3DSpans();
+					}
+				}
+			}
 		} catch (e) {}
 		// fire 105b (the fast-scroll leftover, the 2D twin): a jump past the
 		// release leaves gsap's cached y — or the whole fixed-pin inline
@@ -458,11 +496,43 @@
 				stale3Polls++;
 			} else {
 				stale3Polls = 0;
+				// fire 107: decay the re-creation budget after 100 healthy polls
+				// (~30s) so a one-off mid-load transient never consumes it for the
+				// whole session
+				healthy3Polls++;
+				if (healthy3Polls >= 100) {
+					healthy3Polls = 0;
+					if (recreateAttempts3 > 0) recreateAttempts3--;
+				}
 			}
 			if (stale3Polls >= 4) {
-				console.error("[det3] the 3D station triggers are disconnected (progress frozen inside their windows) — reverting the 3D story to the rect machine");
-				kill3DSpans();
-				stale3Polls = 0;
+				// fire 107: the spans' windows can freeze on a stale layout and a
+				// ScrollTrigger.refresh() does NOT heal them (measured live) — the
+				// frozen windows engaged the 3D dock thousands of pixels early (the
+				// "glitchy 2D/3D fight"). RE-CREATE the spans: fresh windows against
+				// the settled layout, no refresh, no spacer churn, the scroll never
+				// moves. Measuring inside a fixed hold produces DEAD windows (start
+				// 0 / end NaN — the restored-load failure), so a re-create waits
+				// for an unpinned moment. The old kill3DSpans path remains the
+				// last resort after two failed re-creations (and only above the
+				// det region — its teardown refresh teleports the scroll).
+				const colW = document.getElementById("det-article");
+				const pinnedW = colW && getComputedStyle(colW).position === "fixed";
+				if (pinnedW) {
+					stale3Polls = 0; // wait for release; don't burn the budget
+				} else {
+					recreateAttempts3++;
+					if (recreateAttempts3 <= 2) {
+						console.error("[det3] the 3D station triggers are stale (progress frozen inside their windows) — recreating them against the settled layout");
+						recreate3DSpans();
+					} else if (userAboveDetRegion()) {
+						console.error("[det3] 3D station trigger re-creation failed — reverting the 3D story to the rect machine");
+						kill3DSpans();
+					} else {
+						console.error("[det3] 3D station trigger re-creation failed and the user is inside the det region — leaving the spans live (teardown would teleport the scroll)");
+					}
+					stale3Polls = 0;
+				}
 			}
 			current = triggerCurrent3();
 			// fire 106 rev 3 (the user: "stuck on the 2D part while trying to

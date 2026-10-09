@@ -19,7 +19,8 @@
     afterImageEnabled
 	} from "$stores";
 	import mq from "$stores/mq";
-	import { detStep } from "$stores/det.js";
+	import { detStep, detApproached, detRegionNear } from "$stores/det.js";
+	import { det3dStep } from "$stores/det3.js";
 	import * as THREE from "three";
 	import CameraControls from "camera-controls";
 	import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -302,6 +303,13 @@
 	<!-- TODO: Look for better controls? -->
 	<!-- <OrbitControls enableDamping /> -->
 	<!-- TODO: Change touch controls -->
+	<!-- The det story region hands the wheel to the page scroll: camera-controls'
+	     default wheel action (DOLLY) preventDefaults every wheel over the canvas
+	     (measured live: the page cannot be wheeled over ~72% of the viewport in
+	     the det chapters — the user fights dead scroll while the camera silently
+	     zooms). The gate starts when the det column first intersects the viewport
+	     (the approach zone begins before detApproached flips) and the original's
+	     playground keeps its advertised scroll-to-zoom. -->
 	<T.CameraControls
 		bind:ref={$cameraControls}
 		args={[ref, renderer.domElement]}
@@ -311,6 +319,12 @@
 		mouseButtons.right={$show3d
 			? CameraControls.ACTION.ROTATE
 			: CameraControls.ACTION.NONE}
+		mouseButtons.wheel={$detStep >= 1 ||
+		$det3dStep >= 1 ||
+		$detApproached ||
+		$detRegionNear
+			? CameraControls.ACTION.NONE
+			: CameraControls.ACTION.DOLLY}
 		on:controlstart={() => {
 			if ($cameraControls.currentAction == CameraControls.ACTION.ROTATE) {
 				renderer.domElement.classList.add("dragging");
