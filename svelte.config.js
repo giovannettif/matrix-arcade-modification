@@ -11,7 +11,12 @@ const preprocess = sveltePreprocess({
 	}
 });
 
-import dev from "$app/environment";
+// $app/environment is a Vite virtual module — Node cannot resolve it when it
+// loads this file directly, so `vite build` (and the Pages CI run) died with
+// ERR_MODULE_NOT_FOUND (Kit 1.x only wires $app/* inside Vite). NODE_ENV is
+// already "development"/"production" at config-load time for vite dev/build,
+// which is the same signal.
+const dev = process.env.NODE_ENV === "development";
 
 const config = {
 	preprocess: sequence([preprocess, vitePreprocess(), preprocessMeltUI()]),
