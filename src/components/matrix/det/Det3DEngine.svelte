@@ -465,6 +465,30 @@
 				stale3Polls = 0;
 			}
 			current = triggerCurrent3();
+			// fire 106 rev 3 (the user: "stuck on the 2D part while trying to
+			// show the 3D part, it's glitchy"): the span windows are computed
+			// at creation against the layout OF THAT MOMENT — and the 2D
+			// family's pin spacing lands LATE (its first refresh applies
+			// +6500px BELOW the 2D stations, measured live: ST-REFRESH dH
+			// +6500 thirteen seconds in). Until then the 3D windows read
+			// ~6500px too shallow and the window math engages the 3D story
+			// while the user is still mid-2D-story: the glitchy 2D/3D fight.
+			// The station must have actually ARRIVED — under healthy pins a
+			// held station sits at viewport center, so this rect cross-check
+			// passes exactly when the window is telling the truth and blocks
+			// it exactly when the window ran ahead of the layout.
+			const st1Arrival = document.getElementById("det3d-st-1");
+			if (current >= 1 && current <= 5 && st1Arrival) {
+				const st1Top = st1Arrival.getBoundingClientRect().top;
+				if (st1Top > center + window.innerHeight * 0.6) current = 0;
+			}
+			if (current === 6) {
+				const st6Arrival = document.getElementById("det3d-st-6");
+				if (st6Arrival) {
+					const st6Top = st6Arrival.getBoundingClientRect().top;
+					if (st6Top > center + window.innerHeight * 1.2) current = 0;
+				}
+			}
 			// fire 92: the try-it runway — the same footer-anchored engagement
 			// the rect mode's st-6 rule provided (triggerCurrent caps at 5, and
 			// the band/yield blocks below all assume current === 0)

@@ -23,9 +23,14 @@ export function initScrollProbe() {
 
 	const spanWindows = () => {
 		try {
-			return window.__detdev
-				? window.__detdev.snap().pins.spans.map((s) => `${s.start}-${s.end}`)
-				: null;
+			if (!window.__detdev) return null;
+			const s = window.__detdev.snap();
+			return {
+				detStep: s.detStep,
+				det3dStep: s.det3dStep,
+				spans2: s.pins.spans.map((w) => `${w.start}-${w.end}`),
+				spans3: s.pins.spans3.map((w) => `${w.start}-${w.end}`)
+			};
 		} catch (e) {
 			return "err";
 		}
@@ -47,7 +52,7 @@ export function initScrollProbe() {
 			pos: cs ? cs.position : null,
 			tf: tf === "none" ? "none" : tf.slice(0, 40),
 			rectTop: el ? Math.round(el.getBoundingClientRect().top) : null,
-			spans: spanWindows()
+			state: spanWindows()
 		};
 		lastY = y;
 		lastH = h;

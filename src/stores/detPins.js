@@ -142,7 +142,19 @@ export function span1Progress() {
 // document box; re-locked after every refresh, cleared before teardown.
 export function lockDetSpacerHeights() {
 	if (typeof window === "undefined") return;
-	for (const s of document.querySelectorAll(".pin-spacer")) {
+	const spacers = [...document.querySelectorAll(".pin-spacer")];
+	// fire 106 rev 2 (the 3D-chapter blocker): the old re-lock measured the
+	// CURRENT box — which the previous min-height itself was clamping — so a
+	// height that legitimately shrank (the 3D watchdog's kill3DSpans, a
+	// teardown, font settle) could NEVER be recorded: the stale lock held the
+	// document 6500px too tall forever, displaced det3d-st-6 past the
+	// footer-relative sanity window, and the 3D story held det3dStep 0 —
+	// stuck on the 2D part, unable to reach the 3D chapter. Clear first,
+	// measure the NATURAL height, then re-lock (one synchronous pass; a
+	// mid-engage transient can at worst record a too-small lock, which is
+	// harmless — only too-tall locks were destructive).
+	for (const s of spacers) s.style.minHeight = "";
+	for (const s of spacers) {
 		const h = s.getBoundingClientRect().height;
 		if (h > 0) s.style.minHeight = `${Math.round(h)}px`;
 	}
@@ -206,6 +218,11 @@ export function kill3DSpans() {
 	stationTls3D = [];
 	stationTriggers3D = [];
 	spans3Disabled = true;
+	// fire 106 rev 2: the 3D spacing is about to be removed — unmin the
+	// spacers or the stale lock would hold the document 6500px too tall and
+	// displace the det3d stations past the footer-relative sanity window
+	// (the "stuck on the 2D part, 3D unreachable" report)
+	clearDetSpacerLocks();
 	if (get(detPinsLive) && stationTriggers2D.length === 0) {
 		detPinsLive.set(false);
 	}
