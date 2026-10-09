@@ -39,24 +39,11 @@
 
 	// the story's matrices — same arc as the 2D beats (F12: the scene renders
 	// whatever the entries say; the engine owns pushing these per step)
-	// fire 93: canonical in $stores/detPins.js (the pin scrubs read the same objects)
+	// fire 111: canonical in $stores/detPins.js (the station scrubs read the
+	// same objects)
 import {
 	STEP3_MATRIX,
-	detPinsLive,
-	pinsLive as stationPinsLive3,
-	inDetSpan3 as stationInSpan3,
-	triggerCurrent3 as stationTriggerCurrent3,
-	killDetPins,
-	lastSpanEnd3,
-	retryCreateDetPins,
-	kill3DSpans,
-	recreate3DSpans,
-	spans3Dead,
-	detPinsSpans3,
-	pins3Live as pins3LiveRaw,
-	assertDetReadingShift,
-	assertDetReleased,
-	userAboveDetRegion
+	det3StepTarget
 } from "$stores/detPins.js";
 
 	let mounted = false;
@@ -272,7 +259,7 @@ import {
 			// the beat's morph plays (healthy browsers); starved tickers heal
 			// via healStepEntries below.
 			// fire 92: entering a span must NOT snap the morph to its end —
-			// the span's scrub tween plays it with the scroll (scrub: 1)
+			// the station timelines' scrubs play it with the scroll (scrub: 1)
 			if (!inDetSpan3()) set3Target(STEP3_MATRIX[n], { duration: 0.9 });
 		}
 		if (n >= 4) {
@@ -327,26 +314,16 @@ import {
 	let lastVelT3 = 0;
 	let scrollVelocity3 = 0;
 
-	// fire 81 (I5b): the 3D story's per-station pin+scrub spans (the 2D
-	// engine's twin) — fire 84 (P3): RE-ENABLED behind the same settle gate
-	// + self-healing guard as the 2D side (see DetEngine's note).
-	// fire 93: the pin machinery lives in $stores/detPins.js (created in
-	// Arcade's animate() batch — the only timing this page survives). Thin
-	// local aliases keep every gate below unchanged.
-	function pinsLive3() {
-		// fire 104 (F5): per-family — a disconnected 3D span set falls back to
-		// the rect machine while the 2D pins stay live
-		return pins3LiveRaw();
-	}
+	// fire 111: the merged station chain owns the steps; these thin locals
+	// keep the remaining gates readable. "Inside the 3D story span" = the
+	// scroll sits within the det3d stations' pinned range — measured from
+	// the section's own DOM position (the det3d section's top is above the
+	// viewport center and its bottom below it).
 	function inDetSpan3() {
-		return stationInSpan3();
-	}
-	function triggerCurrent3() {
-		return stationTriggerCurrent3();
-	}
-	// fire 104 (F5): the span windows for the disconnect watchdog
-	function stationTriggerCurrent3Spans() {
-		return detPinsSpans3();
+		const sec = document.getElementById("section-det3d");
+		if (!sec) return false;
+		const r = sec.getBoundingClientRect();
+		return r.top <= window.innerHeight / 2 && r.bottom >= window.innerHeight / 2;
 	}
 	let stale3Polls = 0;
 	// fire 107: re-creation budget for the stale-span watchdog — two heals,
@@ -357,15 +334,12 @@ import {
 	// fire 107: the footer-band heal's own session budget (the watchdog's
 	// decay logic doesn't apply — a layout that re-freezes twice stays broken)
 	let bandHealAttempts3 = 0;
-	function killStationPins3() {
-		killDetPins();
-	}
+
 	function det3Update() {
 		if (!mounted || destroyed) return;
 		if (!window.innerWidth || window.innerWidth < 1024) {
-			// fire 92 (P1.7): the below-lg clear tears the pins down too —
-			// the settle gate re-arms on the return to desktop
-			killStationPins3();
+			// the original site is desktop-only; the story state resets with it
+			det3StepTarget.set(0);
 			return;
 		}
 		// fire 81 (I5 fallback): the scroll velocity — fast scrolling
@@ -384,353 +358,20 @@ import {
 				sync3Fx();
 			}
 		}
-		// fire 101: the pin retry (the 2D twin) — re-attempt deferred creation
-		try {
-			retryCreateDetPins();
-		} catch (e) {}
-		// fire 107: deterministic stale-window heal — creation racing the layout
-		// cascade (or landing while the column is already mid-pin on a restored
-		// load) can freeze the 3D spans' windows shallow or DEAD (measured live:
-		// spans3 at 26104 while det3d-st-1 actually sat at 37784, and start 0 /
-		// end NaN after a mid-pin re-create), engaging the 3D story/dock in the
-		// wrong place or not at all. The windows are refresh-robust (a forced
-		// ScrollTrigger.refresh() healed nothing), so RE-CREATE them: fresh
-		// triggers measure the settled layout, no refresh, the scroll never
-		// moves. Two guards: the column must NOT be pinned right now (measuring
-		// inside a fixed hold is what produced the dead windows), and NaN ends
-		// count as out-of-band. Sanity band = the engine's own footer-relative
-		// anchorOk tolerance (release before the footer, but not absurdly deep).
-		// fire 109 (the out-of-order 3D world, measured at y 40900 with
-		// det3dStep 5 during the 2D try-it): the heal was gated on
-		// stationPinsLive3() — but a DEFERRED 3D family (skipped at creation
-		// while the column was pinned) leaves stationTriggers3D empty,
-		// pins3Live false forever, and the heal deadlocks against its own
-		// guard. The 3D story then falls to the rect machine, whose frozen
-		// in-column rects read every station "past center" (all negative tops
-		// inside the fixed hold) — step 5 engaged three thousand pixels early.
-		// Gate on detPinsLive (the 2D family's liveness) instead, and treat a
-		// never-created family (null end) as healable.
-		try {
-			if (get(detPinsLive) && !spans3Dead() && bandHealAttempts3 < 4) {
-				const lastEnd = lastSpanEnd3();
-				const footerEl = document.querySelector("footer");
-				const colNow = document.getElementById("det-article");
-				const colPinned = colNow && getComputedStyle(colNow).position === "fixed";
-				if (!colPinned && footerEl) {
-					const ft = footerEl.getBoundingClientRect().top + window.scrollY;
-					const outOfBand =
-						lastEnd === null ||
-						!Number.isFinite(lastEnd) ||
-						lastEnd > ft - 200 ||
-						lastEnd < ft - 8000;
-					if (outOfBand) {
-						bandHealAttempts3++;
-						console.error("[det3] the 3D span windows are missing or outside the footer-relative sanity band — recreating them against the settled layout");
-						recreate3DSpans();
-					}
-				}
-			}
-		} catch (e) {}
-		// fire 105b (the fast-scroll leftover, the 2D twin): a jump past the
-		// release leaves gsap's cached y — or the whole fixed-pin inline
-		// state — on the column; un-stick, then zero y
-		try {
-			if (stationPinsLive3()) {
-				assertDetReleased();
-				assertDetReadingShift();
-			}
-		} catch (e) {}
-		// no section markup yet (it lands with P5.2): the poll owns no scroll
-		// mapping (forcing step 0 would fight the DEV hook), but the current
-		// step's morph still self-heals — the zombie-ticker snap below is what
-		// makes markup-less DEV/QA verification deterministic
-		if (!document.getElementById("det3d-st-1")) {
-			healStep3Entries(get(det3dStep));
-			return;
-		}
-		const center = window.innerHeight / 2;
-		// fire 20 full-QA guard: mid-calibration loads momentarily report
-		// impossible det3d rects (measured: st-1 at abs 44710 on a 44410-tall
-		// document). Acting on them engages the 3D story and reverts it within
-		// a poll, stranding the camera mid-glide between the 2D and 3D poses —
-		// sanity-check the run and HOLD the current step while rects are garbage
-		const docH = document.documentElement.scrollHeight;
-		const tops = [];
-		for (let n = 1; n <= 6; n++) {
-			const el = document.getElementById(`det3d-st-${n}`);
-			if (!el) continue;
-			const abs = el.getBoundingClientRect().top + window.scrollY;
-			tops.push(abs < -50 || abs > docH + 50 ? NaN : abs);
-		}
-		const anchorOk = (() => {
-			// fire 82 (adv-1 finding): a coherent-but-STALE parked family (burst
-			// scrolling freezes the rects at early positions) passed the
-			// monotonic sanity and drove det3dStep 6 from the lie — the 3D dock
-			// mounted ~1000px above the real try-it, shadowing the 2D game.
-			// fire 84 (P1, USER-REPORTED regression): the original absolute
-			// window [3800, 7000] overfit two calibration samples — a legitimate
-			// load measured 1516 (the det3d stations sit deeper relative to the
-			// footer there) and was rejected, holding det3dStep 0 forever: the
-			// user could never reach the 3D section. The ROBUST anchor is
-			// footer-RELATIVE: the det3d try-it must sit ABOVE the footer by at
-			// least the tail runway (~200px+) and not absurdly deep (<8000).
-			// Accepts 1516 / 5030 / 5349; still rejects the parked lie (the
-			// family frozen BELOW the footer).
-			const s6 = document.getElementById("det3d-st-6");
-			const f = document.querySelector("footer");
-			if (!s6 || !f) return true;
-			const s6abs = s6.getBoundingClientRect().top + window.scrollY;
-			const ftp = f.getBoundingClientRect().top + window.scrollY;
-			return s6abs < ftp - 200 && s6abs > ftp - 8000;
-		})();
-		const rectsSane =
-			anchorOk &&
-			tops.length >= 3 &&
-			tops.every((v, i) => Number.isFinite(v) && (i === 0 || v >= tops[i - 1] - 50));
-		let current;
-		// fire 92 (the re-anchor): with the pins live the station triggers are
-		// the story state — the pre-flight/rect rule below reads pin-shifted
-		// rects (expected under pins, not lies, but meaningless as step input)
-		if (pinsLive3()) {
-			// fire 104 (F5): the disconnect watchdog — measured live: the 3D
-			// triggers can go stale (progress frozen at 0 with the scroll INSIDE
-			// their windows; the 2D family unaffected). 4 consecutive stale polls
-			// deep inside span3[0] -> kill the 3D spans; the rect machine and its
-			// footer-anchored band take the 3D story back.
-			// fire 105b: the stale test now requires the scroll to still be
-			// INSIDE span3[0]'s window — merely being PAST its start also reads
-			// progress 0 for a few polls after a fast transit (scrub + rAF lag),
-			// and the old test killed the whole family on every fast scroll
-			// through the 3D chapter (the user's fast-scroll scenario).
-			const sp3 = detPinsSpans3();
-			const s3first = sp3[0];
-			if (
-				s3first &&
-				window.scrollY > s3first.start + 400 &&
-				window.scrollY < s3first.end &&
-				sp3.every((x) => !x.active && x.progress === 0)
-			) {
-				stale3Polls++;
-			} else {
-				stale3Polls = 0;
-				// fire 107: decay the re-creation budget after 100 healthy polls
-				// (~30s) so a one-off mid-load transient never consumes it for the
-				// whole session
-				healthy3Polls++;
-				if (healthy3Polls >= 100) {
-					healthy3Polls = 0;
-					if (recreateAttempts3 > 0) recreateAttempts3--;
-				}
-			}
-			if (stale3Polls >= 4) {
-				// fire 107: the spans' windows can freeze on a stale layout and a
-				// ScrollTrigger.refresh() does NOT heal them (measured live) — the
-				// frozen windows engaged the 3D dock thousands of pixels early (the
-				// "glitchy 2D/3D fight"). RE-CREATE the spans: fresh windows against
-				// the settled layout, no refresh, no spacer churn, the scroll never
-				// moves. Measuring inside a fixed hold produces DEAD windows (start
-				// 0 / end NaN — the restored-load failure), so a re-create waits
-				// for an unpinned moment. The old kill3DSpans path remains the
-				// last resort after two failed re-creations (and only above the
-				// det region — its teardown refresh teleports the scroll).
-				const colW = document.getElementById("det-article");
-				const pinnedW = colW && getComputedStyle(colW).position === "fixed";
-				if (pinnedW) {
-					stale3Polls = 0; // wait for release; don't burn the budget
-				} else {
-					recreateAttempts3++;
-					if (recreateAttempts3 <= 2) {
-						console.error("[det3] the 3D station triggers are stale (progress frozen inside their windows) — recreating them against the settled layout");
-						recreate3DSpans();
-					} else if (userAboveDetRegion()) {
-						console.error("[det3] 3D station trigger re-creation failed — reverting the 3D story to the rect machine");
-						kill3DSpans();
-					} else {
-						console.error("[det3] 3D station trigger re-creation failed and the user is inside the det region — leaving the spans live (teardown would teleport the scroll)");
-					}
-					stale3Polls = 0;
-				}
-			}
-			current = triggerCurrent3();
-			// fire 106 rev 3 (the user: "stuck on the 2D part while trying to
-			// show the 3D part, it's glitchy"): the span windows are computed
-			// at creation against the layout OF THAT MOMENT — and the 2D
-			// family's pin spacing lands LATE (its first refresh applies
-			// +6500px BELOW the 2D stations, measured live: ST-REFRESH dH
-			// +6500 thirteen seconds in). Until then the 3D windows read
-			// ~6500px too shallow and the window math engages the 3D story
-			// while the user is still mid-2D-story: the glitchy 2D/3D fight.
-			// The station must have actually ARRIVED — under healthy pins a
-			// held station sits at viewport center, so this rect cross-check
-			// passes exactly when the window is telling the truth and blocks
-			// it exactly when the window ran ahead of the layout.
-			// fire 110 (the 3D world regressing to station 1 mid-chapter, the
-			// user's "3D is quite glitched"): the rect cross-checks read the
-			// VISUAL rects, which include the column's transform pin offset
-			// (translate y up to +6500 while a 3D hold is live) — the held
-			// stations' visual tops sit thousands of px BELOW center, the
-			// check decided "not arrived", zeroed the step mid-hold, and the
-			// step flap reset the 3D world to station 1's identity (the
-			// identity HUD + top-down camera regression). The flow-relative
-			// top (visual minus the pin's transform offset) is what "arrived"
-			// means under transform pinning.
-			const colPinY = (() => {
-				const colEl0 = document.getElementById("det-article");
-				if (!colEl0) return 0;
-				const y = gsap.getProperty(colEl0, "y");
-				return typeof y === "number" ? y : 0;
-			})();
-			const st1Arrival = document.getElementById("det3d-st-1");
-			if (current >= 1 && current <= 5 && st1Arrival) {
-				const st1Top = st1Arrival.getBoundingClientRect().top - colPinY;
-				if (st1Top > center + window.innerHeight * 0.6) current = 0;
-			}
-			if (current === 6) {
-				const st6Arrival = document.getElementById("det3d-st-6");
-				if (st6Arrival) {
-					const st6Top = st6Arrival.getBoundingClientRect().top - colPinY;
-					if (st6Top > center + window.innerHeight * 1.2) current = 0;
-				}
-			}
-			// fire 92: the try-it runway — the same footer-anchored engagement
-			// the rect mode's st-6 rule provided (triggerCurrent caps at 5, and
-			// the band/yield blocks below all assume current === 0)
-			// fire 100 iterate: the last span's end (the frozen-hold-rect artifact
-			// applies here too — see DetEngine's note)
-			const lastEnd3 = lastSpanEnd3();
-			if (lastEnd3 !== null) {
-				if (window.scrollY >= lastEnd3 + 100) current = 6;
-			} else {
-				const footerElT = document.querySelector("footer");
-				if (footerElT) {
-					const ftT = footerElT.getBoundingClientRect().top + window.scrollY;
-					if (window.innerHeight + window.scrollY >= ftT - 40) current = 6;
-				}
-			}
-		} else if (rectsSane) {
-			current = 0;
-			for (let n = 1; n <= 6; n++) {
-				const el = document.getElementById(`det3d-st-${n}`);
-				if (!el) continue;
-				if (el.getBoundingClientRect().top <= center) current = n;
-			}
-		} else {
-			current = get(det3dStep); // hold — never revert from garbage rects
-		}
-		// exploded-pin loads freeze the det3d paragraphs' rects (the 2D G-B
-		// pattern): anchor a footer-adjacent band so the 3D story + try-it
-		// stay reachable — the same rescue DetEngine ships for the 2D family.
-		// Gated on the 2D story having reached its try-it (detStep 6): the 2D
-		// band starts HIGHER than this one, so ungated the two bands overlap
-		// on exploded loads and the stories would fight over the camera
-		if (current === 0 && get(detStep) === 6) {
-			const footerEl = document.querySelector("footer");
-			if (footerEl) {
-				const footerTop = footerEl.getBoundingClientRect().top + window.scrollY;
-				// fire 55 (the fire-51 residual, live-confirmed in fire 53): the
-				// old tryItAt (footerTop - 40) EQUALLED the 2D rule's step-6
-				// threshold, and the fraction branch then mapped the band to
-				// steps 1-5 INSIDE the detStep-6 zone - the 3D story/dock
-				// shadowed the 2D try-it overlay (game + guide + spotlight)
-				// for the whole bottom of band-driven loads. Now the 3D try-it
-				// engages 0.35 viewport-heights deeper and the band otherwise
-				// YIELDS (current stays 0), so the 2D overlay owns its window
-				// and re-owns it when scrolling back up from the 3D try-it.
-				// Healthy loads are untouched - the band only runs when the
-				// primary rect rule finds nothing, and on healthy loads the
-				// 2D try-it sits far above this band.
-				// fire 67 (FIX-E): the threshold could sit past the document's
-				// own end (footer + tail shorter than 0.35vh leaves tryItAt
-				// beyond max scroll) — det3dStep 6 was physically unreachable
-				// on those loads and the dock never mounted
-				const tryItAt = Math.min(
-					footerTop + window.innerHeight * 0.35,
-					document.documentElement.scrollHeight - 80
-				);
-				if (window.innerHeight + window.scrollY >= tryItAt) {
-					current = 6;
-				}
-				// else: stay 0 - the 2D try-it overlay owns the window
-			}
-		}
-		// fire 55/56/59: the 2D try-it zone rule. When detStep 6 is live and
-		// bottomNow sits in the 2D try-it's footer-anchored band
-		// [ft-40, ft+0.35vh), the 3D yields to 0 (the 2D overlay owns) —
-		// UNLESS the 3D try-it's OWN text is on screen (|det3d-st-6 top| <
-		// vh): on collapsed-pin calibrations the compressed geometry puts the
-		// det3d-st-6 paragraph inside that band, and then the 3D dock is the
-		// overlay matching the visible text. Healthy loads: the band sits
-		// past the det3d-st-6 text (|top| just under vh at its start), so the
-		// yield fires only in the true dead band and the deep threshold
-		// re-engages 6 immediately after - no flapping; inside the live 3D
-		// story the band is never reached (det3d-st-6 still below).
-		const det3St6El = document.getElementById("det3d-st-6");
-		const footerEl0 = document.querySelector("footer");
-		if (footerEl0 && get(detStep) === 6) {
-			const ft0 = footerEl0.getBoundingClientRect().top + window.scrollY;
-			const bn0 = window.innerHeight + window.scrollY;
-			const st6top = det3St6El ? det3St6El.getBoundingClientRect().top : 0;
-			// fire 67 (FIX-E): the yield zone must END exactly where the
-			// clamped 3D-try-it engagement begins — the band's threshold moved
-			// earlier (the docH clamp), so an unclamped upper bound let the
-			// yield revert the engagement inside the overlap
-			const try3At = Math.min(
-				ft0 + window.innerHeight * 0.35,
-				document.documentElement.scrollHeight - 80
-			);
-			const inZone = bn0 >= ft0 - 40 && bn0 < try3At;
-			if (inZone && Math.abs(st6top) > window.innerHeight) {
-				current = 0;
-				// fire 62/63 residual: the yielded window showed the 3D walls as
-				// diagonal streaks — force the 2D bright-grid state HERE, not
-				// just via apply3Step(0), so no flapping path can leave g3 true
-				// over the 2D try-it
-				grid3dToggled.set(false);
-				transformedGridToggled.set(true);
-				gridToggled.set(false);
-			} else if (bn0 >= try3At) {
-				current = 6;
-			}
-		}
-		// fire 73 (H1): the footer-cover hand-off — the 2D engine's issue-05
-		// exit (DetEngine's footerTop + 0.55vh rule) had no 3D twin, so
-		// det3dStep held 6 at the footer and the dock + guide + arrow floated
-		// over the page footer (user screenshot). This runs AFTER the band and
-		// yield blocks and independent of the detStep gate: at the footer
-		// detStep is already 0, which is exactly what disarms the yield and
-		// let the band re-engage 6 down here.
-		const footerElH = document.querySelector("footer");
-		if (footerElH) {
-			const ftH = footerElH.getBoundingClientRect().top + window.scrollY;
-			// fire 91 (adv-10 finding): on collapsed calibrations the +0.55vh
-			// threshold can sit past max scroll — the absolute bottom is always
-			// the clean-footer zone (the 2D engine's clamp, 3D twin)
-			if (
-				window.innerHeight + window.scrollY > ftH + window.innerHeight * 0.55 ||
-				window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
-			) {
-				current = 0;
-			}
-		}
-		// fire 84 (P3): the active-station glow on the 3D story text (the 2D
-		// engine's twin — the Section component's .active gradient marks the
-		// paragraph being played, the "jumps to the next piece" marker)
-		// fire 92: with the pins live the triggers' toggleClass owns the glow
-		if (!pinsLive3()) {
-			for (let n = 1; n <= 6; n++) {
-				const el = document.getElementById(`det3d-st-${n}`);
-				if (el) el.classList.toggle("active", n === current);
-			}
-		}
-		if (get(det3dStep) !== current) apply3Step(current);
+		// fire 111: the step state comes from the station callbacks
+		// (detPins.createDetStations writes det3StepTarget on enter/enterBack/
+		// leaveBack — the original's onEnter pattern). The poll only applies
+		// it and runs the world repairs; every fire-era derivation rule (the
+		// rect machines, the bands, the yield/arrival/footer rules) is gone
+		// with the parallel pin machinery that needed them.
+		let current = get(det3StepTarget);
+
 		healStep3Entries(Math.min(current, 5));
-		// fire 64 (FIX-B, PLAN-FIRE63): the 3D story text rescue — try-isolated
-		// like the other sub-steps
-		try {
-			reveal3dPassedSteps(center);
-		} catch (e) {}
 		// fire 63: each poll sub-step is try-isolated — the fire-62 root bug
-		// (one throw silently killed every repair after it) stays impossible
+		// (one throw silently killed every repair after it) stays impossible.
+		// fire 111: the text-reveal rescue is gone — the original's own
+		// text-reveal loop (#article section.animate > *) covers the det
+		// sections now that they live inside #article.
 		try {
 			poll3SettleGuard();
 		} catch (e) {}

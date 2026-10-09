@@ -47,7 +47,7 @@
 	} from "$stores";
 	// CS375: det story step — Maxwell is hidden while the determinant section plays
 	import { detStep } from "$stores/det.js";
-	import { retryCreateDetPins } from "$stores/detPins.js";
+	import { createDetStations } from "$stores/detPins.js";
 	// fire 65 (FIX-C): the 3D det chapter's step — every "hide when the det
 	// section owns the canvas" gate below keyed only on the 2D detStep, so
 	// the original's content (near-black backdrop planes, cat, narrative
@@ -2254,9 +2254,9 @@
 		// call simply becomes the retry loop's first attempt; creation lands
 		// ~1s later on the settled layout.
 		try {
-			retryCreateDetPins();
+			createDetStations();
 		} catch (err) {
-			console.error("[det] createDetPins threw:", err);
+			console.error("[det] createDetStations threw:", err);
 		}
 	}
 

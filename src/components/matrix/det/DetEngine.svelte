@@ -94,8 +94,9 @@
 				// mount flush aborted before the engine's onMount (the poll
 				// never starts) — distinguishes a dead poll from a dead story
 				mounted,
-				// fire 92/93 (the pin QA): the module-side station-pin state
-				pins: pinsSnapshot()
+				// fire 111: the pin-QA surface is gone with the parallel pin
+				// machinery — the station callbacks own the steps now
+				detStepTarget: get(detStepTarget)
 			})
 		};
 	}
@@ -109,18 +110,10 @@
 	// fire 93: canonical in $stores/detPins.js (the pin scrubs read the same objects)
 	import {
 		STEP_MATRIX,
-		pinsLive as stationPinsLive,
-		inDetSpan as stationInSpan,
-		triggerCurrent as stationTriggerCurrent,
-		killDetPins,
-		lastSpanEnd,
-		span1Progress,
-		spanScrub2D,
-		lockDetSpacerHeights,
-		pinsSnapshot,
-		retryCreateDetPins,
-		assertDetReadingShift,
-		assertDetReleased
+		detSpanScrub,
+		detSpan1Progress,
+		detStepTarget,
+		detStationsReady
 	} from "$stores/detPins.js";
 
 	let mounted = false;
@@ -437,23 +430,10 @@
 	// Arcade's animate() batch (the original's own creation moment; the only
 	// timing this page survives — see the module note for fires 81/92). The
 	// engines keep thin local aliases so every gate below reads unchanged.
-	function pinsLive() {
-		return stationPinsLive();
-	}
 	function inDetSpan() {
-		return stationInSpan();
-	}
-	function triggerCurrent() {
-		return stationTriggerCurrent();
-	}
-	function killStationPins() {
-		killDetPins();
-	}
-
-	// fire 100: the last 2D span's end scroll position (the try-it hand-off
-	// anchor under pins), or null when the pins are off
-	function stationTriggerEnd() {
-		return lastSpanEnd();
+		// fire 111: inside the det story's pinned scroll range — the merged
+		// station chain's window math (null above det-st-1's start)
+		return detSpanScrub() !== null;
 	}
 	function setStoryReveal(target, instant = false) {
 		if (storyRevealTween) {
@@ -556,11 +536,11 @@
 	// same "slide with the scroll" contract, no animation frames required.
 	let lastSpanWrite = null;
 	function updateSpanScrub() {
-		if (!pinsLive() || get(detGame).status !== "idle") {
+		if (!detStationsReady() || get(detGame).status !== "idle") {
 			lastSpanWrite = null;
 			return;
 		}
-		const s = spanScrub2D();
+		const s = detSpanScrub();
 		if (!s) {
 			lastSpanWrite = null;
 			return;
@@ -574,7 +554,7 @@
 	function updateStoryScrub(current) {
 		const step = get(detStep);
 		if (
-			pinsLive() || // fire 92: the span scrubs own the morph; this zone reads station rects, which lie under pins
+			detSpanScrub() !== null || // the pinned story's windows own the morph inside their span
 			inDetSpan() ||
 			current < 1 ||
 			current > 4 ||
@@ -1137,32 +1117,7 @@
 			}
 	}
 
-	function revealPassedSteps(center) {
-		// the original attaches a paused gsap.from({opacity: 0}) entrance to
-		// every child of every section.animate, played by a ScrollTrigger whose
-		// pin-adjusted start never lines up with the det steps' scroll — force
-		// the reveal for det content once it reaches the reading position
-		const section = document.getElementById("section-det");
-		if (!section) return;
-		const revealed = [];
-		for (const child of section.children) {
-			if (child.getBoundingClientRect().top <= center + 80) revealed.push(child);
-		}
-		if (!revealed.length) return;
-		gsap.set(revealed, { clearProps: "opacity,transform" });
-		for (const child of revealed) {
-			const lis = child.querySelectorAll("li");
-			if (lis.length) gsap.set(lis, { clearProps: "opacity,transform" });
-		}
-	}
 
-	// fire 76 (H4a): the approach hand-off — the Arcade ~1488 section-2 entry
-	// pattern mirrored for the det section. Engage when the det section
-	// visibly approaches while both stories idle; release with hysteresis
-	// when it recedes. The original's own triggers re-own the world stores on
-	// the way back up (st-13's onLeaveBack restores the model/grids/warp), so
-	// the release only undoes what nothing else will: the camera pose. A fast
-	// scroll-through releases WITHOUT touching anything the story entry owns.
 	function tweenApproachT(target, duration = 0.9) {
 		if (approachTween) approachTween.kill();
 		const proxy = { v: approachT };
@@ -1430,42 +1385,15 @@
 		// fire 101: the pin retry — a load restored deep into the page deferred
 		// creation at animate() time; re-attempt from the poll until it passes
 		// (idempotent; the viewport guard inside decides)
-		try {
-			retryCreateDetPins();
-		} catch (e) {}
+		// fire 111: the step state comes from the station callbacks
+		// (detPins.createDetStations writes detStepTarget on enter/enterBack/
+		// leaveBack — the original's onEnter pattern). The poll only applies
+		// it; every fire-era derivation rule (the rect machines, the bands,
+		// the yield/arrival/footer rules) is gone with the parallel pin
+		// machinery that needed them.
 		try {
 			updateApproach();
 		} catch (e) {}
-		// fire 106 (the probe's verdict): at each pin engage ST's multi-pin
-		// bookkeeping momentarily drops the shared spacer's height contribution
-		// (user dump: -14368 for one layout pass) — Chrome clamps scrollY into
-		// the shrunken document (dY -814/-846) before the padding is restored,
-		// and the clamp sticks: back below the pin start, infinite loop. The
-		// spacers' measured heights are held as inline min-heights (locked at
-		// creation + refresh; re-locked here so a spacer created late at its
-		// first engage is covered too) — the transient can never shrink the
-		// document below the user again.
-		try {
-			if (pinsLive()) {
-				assertDetReleased();
-				assertDetReadingShift();
-				lockDetSpacerHeights();
-			}
-		} catch (e) {}
-		// fire 92 (the re-anchor): with the pins live the station triggers —
-		// not the DOM rects — are the story state; the pinned rects NEVER
-		// drive detStep (the fire-84 failure mode: the reflux parks them at
-		// lying positions and the rect rule computed 0 mid-story)
-		let current = 0;
-		if (pinsLive()) {
-			current = triggerCurrent();
-		} else {
-			for (let n = 1; n <= 6; n++) {
-				const el = document.getElementById(`det-st-${n}`);
-				if (!el) continue;
-				if (el.getBoundingClientRect().top <= center) current = n;
-			}
-		}
 		// fire 81 (I5 fallback): the scroll velocity (px/s) — fast scrolling
 		// fast-forwards the entrance tweens ("I scroll so fast I miss half of
 		// it": the settled state appears immediately instead of catch-up)
@@ -1497,203 +1425,9 @@
 		} else {
 			frozenMorphPolls = 0;
 		}
-		// fire 105 (the section-jump teleport, root cause): this second rect
-		// loop used to run UNCONDITIONALLY and stomp the trigger-anchored
-		// current above. Under live pins the article is PINNED on and off
-		// around each span boundary — in-flow, the station rects sit only
-		// ~290px apart while the trigger windows are 1300px apart — so in
-		// every unpinned instant this loop computed a step or two AHEAD of
-		// the story (their tops still above the viewport center) and the
-		// trigger machinery then pulled the step back: the user's "it shows
-		// instantly a few steps ahead and then goes back". The fire-92
-		// contract (pinned rects NEVER drive detStep) is now actually
-		// enforced: under pins only triggerCurrent() + the try-it/footer
-		// rules below speak.
-		if (!pinsLive()) {
-			for (let n = 1; n <= 6; n++) {
-				const el = document.getElementById(`det-st-${n}`);
-				if (!el) continue;
-				if (el.getBoundingClientRect().top <= center) current = n;
-			}
-		}
-		// pin-spacer calibration varies between loads and can leave det-st-6
-		// short of the viewport center at max scroll — the try-it is the page's
-		// terminal state, so it engages on the scroll bottom. Anchored to the
-		// FOOTER instead of raw max scroll: engage while the canvas is still
-		// full-bleed (sticky in the article), and hand off to a clean footer
-		// view once the footer covers the screen — otherwise the det overlay
-		// floats over the footer content with nothing behind it (issue-05)
-		const footerEl = document.querySelector("footer");
-		const bottomNow = window.innerHeight + window.scrollY;
-		if (footerEl) {
-			const articleBottom =
-				footerEl.getBoundingClientRect().top + window.scrollY;
-			// fire 100: with the pins live the try-it engages at det-st-6's OWN
-			// center-cross (the original's st-13 pattern) — the raw footer-40
-			// threshold ate span 5's hold on the compact spacer layout
-			if (pinsLive()) {
-				// fire 100 iterate: st-6's live rect is a frozen-hold artifact
-				// while the container is pinned (its "abs" rises with scroll) —
-				// anchor to the LAST span's end instead: the container unpins
-				// there and the travel to det-st-6 begins
-				const lastTrigger = stationTriggerEnd();
-				if (lastTrigger !== null) {
-					// scroll-vs-scroll: bottomNow carries the viewport height, the
-					// span end is a scroll position (the off-by-vh engaged the try-it
-					// mid-span-5 on the first cut)
-					// fire 104 (F5): the 3D story takes ownership the moment it
-					// starts — detStep 6 must not ride over the 3D chapter (the
-					// user's "2D try-it screen shows instead of the 3D grid")
-					if (window.scrollY >= lastTrigger + 100 && get(det3dStep) === 0) current = 6;
-				} else if (bottomNow >= articleBottom - 40 && get(det3dStep) === 0) current = 6;
-			} else if (bottomNow >= articleBottom - 40 && get(det3dStep) === 0) current = 6;
-			// fire 104 (F5, the mirror of the 3D yield): once the 3D story is
-		// engaged (det3dStep 1-5) the 2D try-it screen releases — the user's
-		// "2D try-it shows instead of the 3D grid" was this hold crossing the
-		// whole 3D chapter.
-		// fire 107: the same release must cover detStep 1-5 — a fast transit
-		// can cross into the 3D chapter before any 2D poll sampled the try-it
-		// window (detStep still 5), leaving the 2D story's step-5 world
-		// mounted under the 3D cube (measured live: the 2D collapsed square +
-		// HUD rendered through the 3D chapter's first hold). applyStep(0) is
-		// the full 2D exit (shapes fade, camera hand-off). The force is
-		// UNCONDITIONAL on detStep: gated on >= 1 the exit completed, the
-		// span derivation re-engaged 5 and the story flapped 0->5 every poll
-		// (measured: setDetTarget([1,2,2,4]) rewritten every ~300ms).
-		if (get(det3dStep) >= 1 && get(det3dStep) <= 5) {
-			current = 0;
-		}
-		// fire 91 (adv-10 finding): on collapsed calibrations the +0.55vh
-			// threshold can sit past max scroll (missed by 1px live) — the
-			// clean-footer exit then NEVER fires and the terminal shell floats
-			// over the footer. The absolute bottom is always clean-footer.
-			if (
-				bottomNow > articleBottom + window.innerHeight * 0.55 ||
-				bottomNow >= document.documentElement.scrollHeight - 2
-			) {
-				current = 0;
-			}
-		} else if (
-			bottomNow >=
-			document.documentElement.scrollHeight - 500
-		) {
-			current = 6;
-		}
-		// fire 62 (N1/N3 root cause, diagnosed by the chk-N1 frames): the
-		// parked-pin drift FREEZES the det paragraphs' rect tops on some loads
-		// — the primary rule above then engages the story at completely wrong
-		// scrolls (the det square captured over the HERO and over the 3D
-		// chapter's text). Detector: live rects track scroll 1:1; frozen rects
-		// don't move while the page scrolls. When frozen, the primary rule is
-		// DEAD — force current to 0 so the footer-anchored band below becomes
-		// the only driver (its range is calibration-proof), which also gates
-		// the story visuals to the legitimate range: no engagement outside it,
-		// and scrolling back up restores the pre-det world exactly there.
-		const st1Probe = document.getElementById("det-st-1");
-		if (st1Probe) {
-			const top = st1Probe.getBoundingClientRect().top;
-			if (lastRectScroll === null) {
-				lastRectTop = top;
-				lastRectScroll = window.scrollY;
-		} else if (Math.abs(window.scrollY - lastRectScroll) > 600) {
-			if (inDetSpan() || pinsLive()) {
-				// fire 81 (I5b): inside our pin spans the det rects are SUPPOSED
-				// to be frozen (the article is pinned) — a frozen rect is correct
-				// here, not the parked-lie; keep the trackers fresh, never classify
-				// fire 92: with the pins live that holds between spans too (the
-				// post-reflux rects are pin-shifted by design, never classified)
-				lastRectTop = top;
-				lastRectScroll = window.scrollY;
-			} else {
-				// fire 62 fix 2: the RATIO test — live rects track scroll 1:1;
-				// parked rects don't move at all, and DRIFTED rects move LESS
-				// than the scroll (the pin spacer absorbs part of it — the
-				// +5700px class the chk-N1 frames caught). Any mismatch beyond
-				// 300px between "how far the page scrolled" and "how far the
-				// paragraph moved" means the rects lie.
-				const dScroll = Math.abs(window.scrollY - lastRectScroll);
-				const dTop = Math.abs(top - lastRectTop);
-				rectsFrozen = Math.abs(dTop - dScroll) > 300;
-				lastRectTop = top;
-				lastRectScroll = window.scrollY;
-			}
-		}
-		}
-		if (rectsFrozen && current >= 1 && footerEl && !pinsLive()) {
-			// the frozen-rect lie — the band + the footer rules re-drive it
-			// (fire 92: never while the pins own the story — a stale lie from
-			// pre-arm polls must not zero a trigger-anchored current)
-			current = 0;
-		}
-		// G-B rescue (RUN 47/48): on exploded-pin loads the article pin parks
-		// the det paragraphs below the viewport for the whole lower page —
-		// their rect tops freeze (measured 7508..10682 across scrollY
-		// 11800→37500) and the viewport-center rule above can never fire. The
-		// footer sits OUTSIDE the pinned article, so anchor a fallback band to
-		// it and drive steps 1-5 by scroll fraction there (step 6 stays the
-		// footer rule). On healthy loads the primary rule engages ~36px before
-		// this band starts (det-st-1 crosses center at footerTop − 4536), so
-		// the fallback only ever runs when the primary rule is dead.
-		// fire 92: the G-B band is the fallback-of-the-fallback — with the
-		// pins live the triggers own the step derivation and the band must
-		// never run (its rect math reads pin-shifted stations)
-		// fire 93: the band is rect-mode only — with the pins live the triggers own the steps
-		if (current === 0 && footerEl && !stationPinsLive()) {
-			const footerTop = footerEl.getBoundingClientRect().top + window.scrollY;
-			// fire 49 (the REG-32 finding): on collapsed-pin loads (docH ~25k)
-			// the true det stations sit 7500px+ ABOVE the footer — the fixed
-			// 4500 span left a dead zone where the story could not engage.
-			// Small documents widen the band proportionally; healthy loads
-			// (docH ≥ 30000) keep the exact 4500 span, so the primary path is
-			// untouched.
-			const docH = document.documentElement.scrollHeight;
-			const bandSpan = docH < 30000 ? Math.max(4500, Math.round(docH * 0.4)) : 4500;
-			const bandStart = footerTop - bandSpan;
-			const tryItAt = footerTop - 40;
-			if (bottomNow >= bandStart && bottomNow < tryItAt) {
-				const frac = (bottomNow - bandStart) / Math.max(1, tryItAt - bandStart);
-				current = 1 + Math.min(4, Math.floor(frac * 5));
-				if (!fallbackWarned) {
-					fallbackWarned = true;
-					console.warn(
-						"[det] story fallback engaged — the det text never reached its reading position (pin calibration exploded, G-B). Steps driven from the footer-anchored band; the story text column may stay off-screen on this load."
-					);
-				}
-			} else if (
-				bottomNow >= tryItAt &&
-				// fire 73 (H1): the band's step-6 branch ran unbounded, so after
-				// the footer-cover exit above set current = 0 the band re-engaged
-				// 6 at the very bottom — the issue-05 clean-footer hand-off has
-				// been dead on every load since fire 66 (the terminal arrow floated
-				// over the footer; the user's screenshot). The try-it owns only up
-				// to the same threshold the primary rule exits at.
-				bottomNow <= footerTop + window.innerHeight * 0.55
-			) {
-				// fire 66 (FIX-D): the band drove steps 1-5 but NEVER 6 — on
-				// parked-rect loads the frozen-rect gate zeroes the primary
-				// rule's footer branch too, leaving detStep 6 structurally
-				// UNREACHABLE (the try-it could not open at all — six parked
-				// rolls in a row never engaged it). Engage at the exact
-				// threshold the healthy footer rule uses (footerTop - 40).
-				// Healthy loads are untouched: their primary rule sets 6 at
-				// the same threshold, so this block only runs when it died.
-				current = 6;
-			}
-		}
-		// fire 50/105: the morph writers, in order — the pinned-span scrub
-		// first (window math), then the rect-mode approach scrub; a boundary
-		// crossing lands on the exact matrix first, then the entrances play
+		let current = get(detStepTarget);
 		updateSpanScrub();
 		updateStoryScrub(current);
-		// fire 92: with the pins live the triggers' toggleClass owns the glow
-		// (the original's exact mechanism); the manual toggle is rect-mode only
-		if (!pinsLive()) {
-			for (let n = 1; n <= 6; n++) {
-				const el = document.getElementById(`det-st-${n}`);
-				if (el) el.classList.toggle("active", n === current);
-			}
-		}
-		revealPassedSteps(center);
 		healArticleColumn();
 		if (get(detStep) !== current) applyStep(current);
 		// fire 102 (the static beat-1 hold): while the pins are live and span 1
@@ -1705,12 +1439,7 @@
 		// text"). Placed after applyStep so the engaging poll drives immediately.
 		// Stands down under fast scroll so the velocity fast-forward above still
 		// lands the settled state instantly (its own catch-up contract).
-		if (
-			pinsLive() &&
-			inDetSpan() &&
-			get(detStep) === 1 &&
-			Math.abs(scrollVelocity) <= 2600
-		) {
+		if (current === 1 && get(detStep) === 1 && Math.abs(scrollVelocity) <= 2600) {
 			if (stepInTl) {
 				stepInTl.kill();
 				stepInTl = null;

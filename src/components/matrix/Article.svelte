@@ -312,19 +312,18 @@
 			</Action>
 		</div>
 	</Section>
-</div>
 
-<!-- fire 100 (PLAN-FIRE100): the det region is its OWN column + pin container
-     (#det-article, a sibling of #article) — the station spans pin it and
-     nothing else does. Two relocations from the first wrapper attempt: as a
-     CHILD of #article the transform-pin tracked #article's translateX
-     (measured: the pinned container drifted +5000px); as a sibling it has no
-     transformed ancestor and pins with the standard fixed type. The classes
-     mirror #article's column so the det sections render identically. -->
-<div id="det-article" class="relative max-w-prose bg-gradient-to-l from-base-100 via-base-300 via-90% py-12">
-	<!-- CS375 modification: the determinant story — see documentation/PLAN.md -->
-	<!-- tall runway so the original section's ending fully exits the viewport
-	     before the det story's text arrives (issue-02) -->
+	<!-- fire 111 (VERBATIM EXTENSION): the det story sections live INSIDE
+	     #article — the original's single pinned element + station chain drives
+	     them. The det stations are plain extra triggers in the same stProps
+	     pattern (detPins.js), the original's text-reveal loop
+	     (#article section.animate > *) covers them for free, and the whole
+	     fire-100..110 parallel pin machinery (the second column, the locks,
+	     the watchdogs, the heals) is gone. The -65ch reading slide at story
+	     entry already targets #article (the original's own try-it slide). -->
+
+	<!-- tall runway so section-2's ending fully exits the viewport before
+	     the det story's text arrives (issue-02) -->
 	<div class="h-[800px]" />
 	<Section id="section-det" classNames="animate bg-gradient-to-l from-base-100 via-base-300 via-90%">
 		<h2 class="text-neutral">The Determinant: Area and Invertibility</h2>
@@ -489,12 +488,10 @@
 		</div>
 	</Section>
 
-	<!-- tail runway: fire 101 doubled-plus — the 3D story's last spans must
-	     RELEASE well before the footer on every calibration (on compact rolls
-	     their +=1000 windows reached past the footer's top, holding the story
-	     text over the credits), and det-st-6/det3d-st-6 still need their
-	     center-cross reachable at max scroll -->
-	<div class="h-[4700px]" />
+	<!-- tail runway: room for the det3d try-it's hold to release and the
+	     column to hand off to the footer cleanly (the fire-101 finding, kept
+	     from the det column era; sized for the one-pin-per-story chain) -->
+	<div class="h-[1500px]" />
 </div>
 
 <!-- TODO: Composition of matrices -->
