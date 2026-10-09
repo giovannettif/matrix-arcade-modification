@@ -19,6 +19,7 @@
     afterImageEnabled
 	} from "$stores";
 	import mq from "$stores/mq";
+	import { detStep } from "$stores/det.js";
 	import * as THREE from "three";
 	import CameraControls from "camera-controls";
 	import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -64,30 +65,35 @@
 	$: rgbShiftPass.enabled = $rgbShiftEnabled;
 
 	function setupEffectComposer(camera) {
+		// P4.2: build once — the reactive $camera re-fires this on every
+		// camera swap, leaking passes/render targets each time; dispose the
+		// previous composer before rebuilding
+		if (!camera) return;
+		if (composer) composer.dispose?.();
 		composer = new EffectComposer(renderer);
 
-		// FIXME: Have to set size and pixel ratio?
 		composer.addPass(new RenderPass(scene, camera));
 
-		// FIXME: Disable this if not needed?
 		composer.addPass(afterImagePass);
-
-		// composer.addPass(rgbShiftPass);
-
-		// const halfTonePass = new HalftonePass(halfToneParams);
-		// composer.addPass(halfTonePass);
 
 		const gammaCorrectionPass = new ShaderPass(GammaCorrectionShader);
 		composer.addPass(gammaCorrectionPass);
-
-		// const outputPass = new OutputPass();
-		// composer.addPass(outputPass);
-
-		// const smaaPass = new SMAAPass();
-		// composer.addPass(smaaPass);
 	}
 
-	$: setupEffectComposer($camera);
+	$: if ($camera) setupEffectComposer($camera);
+
+	// P4.2 (U2): keep the mathbox context AND the composer in sync with the
+	// wrapper's size — the mount-only context.resize left a stale projection
+	// after any layout change (try-it expansion), which is what made the det
+	// DOM chips drift off the WebGL geometry after the canvas resized
+	$: if (mounted && $size && composer) {
+		context.resize({ viewWidth: $size.width, viewHeight: $size.height });
+		composer.setSize($size.width, $size.height);
+		if ($camera) {
+			$camera.aspect = $size.width / $size.height;
+			$camera.updateProjectionMatrix();
+		}
+	}
 
 	// Post-processing
 	useRender((_, delta) => {
@@ -108,7 +114,13 @@
 		context.frame();
 	});
 
-	$: if (mounted && $mq.lg) animate();
+	let animated = false;
+	$: if (mounted && $mq.lg && !animated) {
+		// P4.2: run once ever — $mq.lg refires across breakpoint crossings and
+		// re-running animate() would stack duplicate ScrollTriggers/pins
+		animated = true;
+		animate();
+	}
 
 	onMount(() => {
 		// FIXME: Set size responsively?
@@ -258,6 +270,25 @@
 			$cameraControls.moveTo(0, 0, 0, true);
 		}
 	}
+
+	// REG-mode QA probe, DEV builds only (2D counterpart of Det3DEngine's
+	// __det3dev): lets automation read the live camera-controls state without
+	// any production cost — stripped from builds by the env gate
+	$: if (import.meta.env.DEV && $cameraControls) {
+		window.__camdev = {
+			cc: $cameraControls,
+			cam: () => {
+				const c = $cameraControls;
+				return {
+					distance: c.distance,
+					polarAngle: c.polarAngle,
+					azimuthAngle: c.azimuthAngle,
+					minDistance: c.minDistance,
+					maxDistance: c.maxDistance
+				};
+			}
+		};
+	}
 </script>
 
 <!-- Set up camera and lighting -->
@@ -275,7 +306,7 @@
 		bind:ref={$cameraControls}
 		args={[ref, renderer.domElement]}
 		minDistance={5}
-		maxDistance={100}
+		maxDistance={$detStep >= 1 && $detStep <= 5 ? 40 : 100}
 		mouseButtons.left={CameraControls.ACTION.TRUCK}
 		mouseButtons.right={$show3d
 			? CameraControls.ACTION.ROTATE

@@ -12,6 +12,9 @@
 import Footer from "./matrix/Footer.svelte";
 import DetOverlay from "./matrix/det/DetOverlay.svelte";
 import DetEngine from "./matrix/det/DetEngine.svelte";
+import DetFormulaCard from "./matrix/det/DetFormulaCard.svelte";
+import Det3DFormulaCard from "./matrix/det/Det3DFormulaCard.svelte";
+import Det3DEngine from "./matrix/det/Det3DEngine.svelte";
 	import mq from "$stores/mq.js";
 	import { RingLoader } from "svelte-loading-spinners";
 	import { colorVector } from "$data/variables";
@@ -49,7 +52,10 @@ import DetEngine from "./matrix/det/DetEngine.svelte";
      never mounts — so the engine and the overlay mount BEFORE the canvas, keeping the
      det story + games alive even on a dead-canvas load. -->
 <DetEngine />
+<Det3DEngine />
 <DetOverlay />
+<DetFormulaCard />
+<Det3DFormulaCard />
 
 {#if !$debug}
 	<Title />
@@ -78,7 +84,9 @@ import DetEngine from "./matrix/det/DetEngine.svelte";
 		<Threlte />
 	</div>
 
-	<Article />
+	<div class="max-w-prose">
+		<Article />
+	</div>
 </article>
 
 <!-- CS375: DetEngine + DetOverlay moved ABOVE the canvas — see the note at the

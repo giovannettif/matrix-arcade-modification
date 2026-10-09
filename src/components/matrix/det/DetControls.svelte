@@ -27,7 +27,25 @@
 	let lastSent = JSON.stringify(vals);
 
 	$: interactive = $detStep === 6;
-	$: roundLive = $detGame.status === "asking";
+	// P2.1: "revealed" counts as live too — the round's matrix must stay on
+	// screen through the summary (the results/markers reference it), and the
+	// spinner-restore below would otherwise yank the shape away mid-summary
+	$: roundLive = $detGame.status !== "idle";
+
+	// N-2 (RUN 49): the hint promises "it resets after the round" — capture the
+	// user's sandbox matrix at round start and hand it back at round end.
+	// (Sync TO the round matrix while it plays is the reactive below; verified
+	// numerically in RUN 48 — dock·point == revealed answer.) lastSent is
+	// deliberately NOT updated here: the user-edit reactive below then sees the
+	// change and morphs the shapes back to the sandbox too.
+	let savedVals = null;
+	$: if (roundLive && !savedVals && $detGame.round) {
+		savedVals = [...vals];
+	}
+	$: if (!roundLive && savedVals) {
+		vals = [...savedVals];
+		savedVals = null;
+	}
 
 	// Keep the spinners in sync when the story or a game round sets the matrix.
 	$: if (!$detStep || !interactive || roundLive) {
@@ -60,7 +78,7 @@
 		</span>
 		<span class="readout-sub">
 			{$detCollapsed
-				? "the plane is squashed onto one line"
+				? "the plane is collapsed — onto a line, or a single point"
 				: `area × ${$detArea.toFixed(1)}${$detFlipped ? " · orientation reversed" : ""}`}
 		</span>
 	</div>
@@ -69,29 +87,32 @@
 		<!-- Matrix entry grid (beat 0 of the guide points here) -->
 		<div class="matrix-grid" data-tour="matrix" class:frozen={roundLive} class:guide-hl={$detGuideStep === 0}>
 			<div>
-				<NumberSpinner bind:value={vals[0]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
+				<NumberSpinner bind:value={vals[0]} step={0.5} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
 			</div>
 			<div>
-				<NumberSpinner bind:value={vals[1]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_B};`} />
+				<NumberSpinner bind:value={vals[1]} step={0.5} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_B};`} />
 			</div>
 			<div>
-				<NumberSpinner bind:value={vals[2]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
+				<NumberSpinner bind:value={vals[2]} step={0.5} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_A};`} />
 			</div>
 			<div>
-				<NumberSpinner bind:value={vals[3]} step={0.1} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_B};`} />
+				<NumberSpinner bind:value={vals[3]} step={0.5} decimals={1} speed={0.1} class="spinner" mainStyle={`color: ${COL_B};`} />
 			</div>
 		</div>
 
 		<!-- Playback -->
 		<div class="flex items-center gap-2">
-			<button class="ctl" on:click={() => ($detPlaying ? pauseDet() : playDet())} aria-label={$detPlaying ? "Pause animation" : "Play animation"}>
+			<!-- fire 104 (F6): the playback controls grey out during a live
+			     prediction round — replaying/skipping the morph would spoil the
+			     round's own reveal choreography -->
+			<button class="ctl" disabled={roundLive} on:click={() => ($detPlaying ? pauseDet() : playDet())} aria-label={$detPlaying ? "Pause animation" : "Play animation"}>
 				{#if $detPlaying}
 					<Pause size={20} />
 				{:else}
 					<Play size={20} />
 				{/if}
 			</button>
-			<button class="ctl" on:click={skipDet} aria-label="Skip to the end of the animation">
+			<button class="ctl" disabled={roundLive} on:click={skipDet} aria-label="Skip to the end of the animation">
 				<SkipForward size={20} />
 			</button>
 		</div>
@@ -105,6 +126,7 @@
 				max="2"
 				step="0.25"
 				value={$detSpeed}
+				disabled={roundLive}
 				on:input={(e) => setDetSpeed(+e.currentTarget.value)}
 			/>
 		</label>
@@ -144,6 +166,13 @@
 		@apply bg-[#1b1c2a];
 	}
 	.ctl {
+		/* fire 104 (F6): the greyed round state */
+	}
+	.ctl:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+	.ctl-unused {
 		@apply grid h-11 w-11 place-items-center rounded-full border-2 border-[#f8f8f2] text-[#f8f8f2];
 		box-shadow: 0 0 10px rgba(248, 248, 242, 0.25);
 		transition: box-shadow 0.2s, background 0.2s;

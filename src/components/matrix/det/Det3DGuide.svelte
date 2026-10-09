@@ -1,37 +1,43 @@
 <script>
+	// fire 67 (FIX-E, user: "no cards overlaid or guided tour, the try it
+	// section looks bad compared to first determinant section"): the 3D
+	// try-it's guided tour — a port of DetGuide.svelte (the same forced
+	// grey-spotlight walk: everything outside the beat's target, the guide
+	// card and the canvas stage is dimmed AND blocks clicks), with beats
+	// targeting the dock's flow (spinners -> volume readout -> predict).
 	import { onMount, onDestroy } from "svelte";
-	import { MousePointerClick, Gauge, Crosshair, BookOpen, ChevronDown, ChevronUp } from "lucide-svelte";
-	import { detGuideStep, detGuideCollapsed } from "$stores/det.js";
-	import { lastSpanEnd } from "$stores/detPins.js";
+	import { MousePointerClick, Gauge, BookOpen, ChevronDown, ChevronUp } from "lucide-svelte";
+	import { det3GuideStep, det3GuideCollapsed } from "$stores/det3.js";
+	import { lastSpanEnd3 } from "$stores/detPins.js";
 
 	const beats = [
 		{
 			icon: MousePointerClick,
 			title: "Edit the matrix",
-			body: "Drag a number left or right to change it — or click it once and type your own. The columns are where the basis vectors land.",
-			target: "matrix"
+			body: "These nine numbers are the 3×3 matrix. Drag one to change it — each column shows where a basis vector lands, and the unit cube becomes the box they span.",
+			target: "3matrix"
 		},
 		{
 			icon: Gauge,
-			title: "Watch the determinant",
-			body: "det(A) here updates live as you drag — the area always scales by |det(A)|, and the sign only flips the orientation. Try to make it negative — then try to make it exactly 0.",
-			target: "readout"
+			title: "Watch the volume",
+			body: "|det(A)| is the box's volume scale, live. Push det(A) negative and the box flips inside out — the volume still scales by |det(A)|, only the orientation reverses; the mirror-image det is exactly what the 2D story hinted at.",
+			target: "3readout"
 		},
 		{
-			icon: Crosshair,
+			icon: MousePointerClick,
 			title: "Predict on the canvas",
-			body: "Start a prediction round, click the canvas to plot where the asked point lands — the ghost ring previews it — then hit Accept. The truth flies out after every try, and the next point follows.",
-			target: "predict"
+			body: "Start a round, click the floor under the pulsing corner, set its height and lock it in. The truth flies out after every try, and the next corner follows.",
+			target: "3predict"
 		},
 		{
 			icon: BookOpen,
 			title: "Break it on purpose",
-			body: "Set det(A) to 0 and start a corner round: the whole square collapses — this example onto one line, though a matrix can collapse it to a single point too — so the corners end up sharing an image. Where a corner came from stops being recoverable. That is why no inverse exists.",
-			target: "predict"
+			body: "Set the matrix so det(A) = 0: the whole cube collapses — this example onto a plane; other singular matrices can flatten space onto a line or a point. Either way the volume is zero and information is thrown away. That is why no inverse exists.",
+			target: "3predict"
 		}
 	];
 
-	$: step = $detGuideStep;
+	$: step = $det3GuideStep;
 	$: beat = step >= 0 && step < beats.length ? beats[step] : null;
 	$: last = step === beats.length - 1;
 	$: if (cardEl) place(beat);
@@ -42,13 +48,8 @@
 	let parked = true;
 	// fire 102: whether the card currently sits at the off-screen park (its CSS
 	// start, left: -9999px) — off-screen <-> on-screen moves must SNAP, never
-	// transition (see moveTo)
+	// transition (see moveTo; the 2D twin DetGuide.svelte)
 	let parkedOff = true;
-	// fire 50 (user: make the tour forced — "show the grey darker fuzz screen
-	// except for the part the guide is and the part its talking about"): one
-	// fixed SVG with evenodd holes. Everything outside the beat's target, the
-	// guide card and the canvas stage is dimmed AND blocks clicks, so the user
-	// walks the tour beat by beat; the holes pass pointer events through.
 	let spotPath = "";
 
 	function rectHole(r, pad) {
@@ -64,17 +65,18 @@
 	function updateSpots() {
 		viewW = window.innerWidth;
 		viewH = window.innerHeight;
-		if (!cardEl || !beat || $detGuideCollapsed || parked) {
+		if (!cardEl || !beat || $det3GuideCollapsed || parked) {
 			spotPath = "";
 			return;
 		}
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
+		const cardW = cardEl.offsetWidth || 320;
+		const cardH = cardEl.offsetHeight || 170;
 		let d = `M0 0H${vw}V${vh}H0Z`;
 		const target = document.querySelector(`[data-tour="${beat.target}"]`);
 		if (target) d += rectHole(target.getBoundingClientRect(), 10);
-		// fire 79 (I2): the card hole tracks the card's CURRENT rect — the card
-		// travels with the beats now, so the parked top-right spot is gone
+		// fire 79 (I2): the card hole tracks the card's CURRENT rect (it travels)
 		d += rectHole(cardEl.getBoundingClientRect(), 14);
 		// fire 85 (adv fix): the canvas hole used to punch the FULL viewport
 		// (the wrapper is full-bleed) — under evenodd that added a second
@@ -97,6 +99,8 @@
 	}
 
 	// fire 79 (I2): the glass mask — the same holes as spotPath, encoded as a
+	// data-URI SVG the .glass layer's CSS mask cuts through
+		// fire 79 (I2): the glass mask — the same holes as spotPath, encoded as a
 	// data-URI SVG that the .glass layer's CSS mask cuts through; rebuilt
 	// together with spotPath. fire 84 (P2, user: the tour greyed out the part
 	// it was pointing at): CSS image masks are ALPHA by default (match-source)
@@ -105,10 +109,8 @@
 	// white evenodd path: the holes are UNPAINTED (alpha 0) there, correct in
 	// both alpha and luminance modes. Explicit pixel dims — percentage
 	// intrinsic sizes don't resolve in image data-URIs; mask-size stretches.
-	// fire 101 (the user's tour report): the mask canvas dims were hardcoded
-	// 1920x1080 — on any other viewport mask-size stretched the holes to the
-	// wrong place and the unpainted right third lit up for no reason. Build
-	// the mask at the LIVE viewport size (captured in place()/updateSpots).
+	// fire 101: the mask canvas at the LIVE viewport size (the hardcoded
+	// 1920x1080 scaled the holes wrong and lit the unpainted right third)
 	let viewW = 1280;
 	let viewH = 720;
 	$: maskImage = spotPath
@@ -117,11 +119,6 @@
 		)}")`
 		: "";
 
-	// position the card next to the beat's target with an arrow pointing at it.
-	// Positioning goes through style.left/top with a CSS transition (the card
-	// visibly travels between beats). The transition is assigned ONCE —
-	// re-assigning it every placement restarts the transition from the old
-	// position, which reads as the card never moving.
 	function moveTo(leftPx, topPx, snap = false) {
 		const l = `${Math.round(leftPx)}px`;
 		const t = `${Math.round(topPx)}px`;
@@ -144,27 +141,18 @@
 		});
 	}
 
-	// fire 102 (the floating-card report): the region test — the card + fuzz
-	// belong ONLY to the det try-it region, in every state (parked/finished/
-	// collapsed included). The region is the engine's OWN step-6 zone, not a
-	// bare rect: with the pins live the try-it engages at the LAST span's end
-	// +100 (DetEngine's hand-off rule — at that scroll the try-it text is
-	// still a little below the fold, so a paragraph-intersection test would
-	// strand the forced tour), and it exits at the engine's clean-footer
-	// thresholds. The try-it text itself (#det-st-6) bounds the DOWN side:
-	// once it has left through the viewport top the card is over the 3D
-	// chapter — the fire-102 band float. The up side is the scroll band
-	// itself, so the test reads true/false on any live scroll tick even when
-	// the engine's poll is stalled (the stuck-card form of this bug); the
-	// rect fallback (pins off) mirrors the engine's center-cross rule.
-	// Below-lg place() returns at the narrow-viewport branch before this runs.
+	// fire 102 (the floating-card report): the region test — the 3D twin of
+	// DetGuide's, on the 3D engine's own step-6 anchors: the try-it engages at
+	// the last 3D span's end +100 (Det3DEngine's hand-off rule) and exits at
+	// the clean-footer thresholds; det3d-st-6 leaving through the viewport
+	// top bounds the down side, and the rect fallback (pins off) mirrors the
+	// engine's center-cross rule. Below-lg place() returns at the
+	// narrow-viewport branch before this runs (hidden rects read 0).
 	function regionOnScreen() {
-		const el = document.getElementById("det-st-6");
+		const el = document.getElementById("det3d-st-6");
 		if (!el) return true;
 		const r = el.getBoundingClientRect();
-		// past the try-it text: the 3D-chapter side. 24px = sliver tolerance —
-		// a knife-edge 0 cut flips the whole card on 1px of scroll while the
-		// text's last line trails off the top edge
+		// past the try-it text (24px sliver tolerance, the 2D twin's note)
 		if (r.bottom <= 24) return false;
 		const footerEl = document.querySelector("footer");
 		if (footerEl) {
@@ -174,24 +162,19 @@
 				bottomNow > articleBottom + window.innerHeight * 0.55 ||
 				bottomNow >= document.documentElement.scrollHeight - 2
 			) {
-				return false; // the clean-footer hand-off (fire 79 I3)
+				return false; // the clean-footer hand-off (fire 73 H1, the 3D twin)
 			}
 		}
-		const spanEnd = lastSpanEnd();
+		const spanEnd = lastSpanEnd3();
 		if (spanEnd !== null) return window.scrollY >= spanEnd + 100; // the pin-span hand-off
 		return r.top <= window.innerHeight / 2; // rect mode: the center-cross rule
 	}
-	// the _beat argument only registers `beat` as a reactive dependency so a
-	// beat change repositions the card + spotlight immediately (the module
-	// `beat` is already fresh — reactives flush in declaration order)
+
 	function place(_beat) {
 		if (!cardEl) return;
 		try {
 			const vw = window.innerWidth;
 			const vh = window.innerHeight;
-
-			// the det story is desktop-only — never paint over the site's
-			// narrow-viewport fallback notice
 			if (vw < 1024) {
 				parked = true;
 				parkedOff = true;
@@ -199,17 +182,12 @@
 				spotPath = "";
 				return;
 			}
-
-			// fire 102: the card + fuzz belong ONLY to the det try-it region —
-			// the finished/collapsed park used to stay fixed top-right across
-			// the whole terminal band (detStep 6 is scroll-absolute from the
-			// try-it through the 3D chapter), so the dismissed card floated
-			// over every chapter inside it, and an active tour's fuzz rode
-			// along the same way. Off-region the card parks off-screen and the
-			// fuzz clears in EVERY state (parked/finished/collapsed included);
-			// place() re-runs on every scroll tick + the 700ms interval, so the
-			// card returns the moment the region is back and the tour state in
-			// detGuideStep is untouched — fully functional inside its region.
+			// fire 102: the card + fuzz belong ONLY to the 3D try-it region —
+			// same rule as the 2D twin (DetGuide.svelte): off-region the card
+			// parks off-screen and the fuzz clears in EVERY state (parked/
+			// finished/collapsed included); place() re-runs on every scroll
+			// tick + the 700ms interval, so the card returns the moment the
+			// region is back and the tour state in det3GuideStep is untouched.
 			if (!regionOnScreen()) {
 				parked = true;
 				parkedOff = true;
@@ -221,16 +199,13 @@
 			const snap = parkedOff;
 			const cardW = cardEl.offsetWidth || 320;
 			const cardH = cardEl.offsetHeight || 170;
-
-			// park at the top-right when there is no active beat or it's folded
-			if (!beat || $detGuideCollapsed) {
+			if (!beat || $det3GuideCollapsed) {
 				parked = true;
 				moveTo(vw - cardW - 24, Math.min(96, vh - cardH - 12), snap);
 				parkedOff = false;
 				spotPath = "";
 				return;
 			}
-
 			const target = document.querySelector(`[data-tour="${beat.target}"]`);
 			if (!target) {
 				parked = true;
@@ -242,9 +217,7 @@
 			parked = false;
 			parkedOff = false;
 			// fire 79 (I2): the card TRAVELS to the beat — beside the target's
-			// right edge, vertically centered on it (flipped to the target's
-			// left when it would overflow the viewport), so the tour visibly
-			// points at the chunk it talks about instead of parking top-right
+			// right edge, vertically centered (flipped left on overflow)
 			const r = target.getBoundingClientRect();
 			let left = r.right + 18;
 			if (left + cardW > vw - 12) left = Math.max(12, r.left - cardW - 18);
@@ -260,23 +233,21 @@
 	}
 
 	function next() {
-		detGuideStep.update((s) => Math.min(s + 1, beats.length - 1));
+		det3GuideStep.update((s) => Math.min(s + 1, beats.length - 1));
 	}
 	function back() {
-		detGuideStep.update((s) => Math.max(s - 1, 0));
+		det3GuideStep.update((s) => Math.max(s - 1, 0));
 	}
 	function finish() {
-		detGuideStep.set(beats.length); // done — card stays, guide text minimized
+		det3GuideStep.set(beats.length); // done — card stays, guide text minimized
 	}
 	function reopen() {
-		detGuideStep.set(0);
-		detGuideCollapsed.set(false);
+		det3GuideStep.set(0);
+		det3GuideCollapsed.set(false);
 	}
 
 	let iv;
 	onMount(() => {
-		// first placement snaps (no transition — otherwise the card would fly in
-		// from its off-screen -9999px start), then travel transitions turn on
 		cardEl.style.transition = "none";
 		const t = setTimeout(() => {
 			place();
@@ -286,8 +257,7 @@
 			});
 		}, 350);
 		window.addEventListener("resize", place);
-		// fire 101: re-place on scroll too (rAF-throttled) — the card + the
-		// fuzz holes previously trailed a scroll by up to the 700ms interval
+		// fire 101: re-place on scroll too (rAF-throttled; the 2D twin)
 		let raf = 0;
 		const onScrollPlace = () => {
 			if (raf) return;
@@ -301,21 +271,19 @@
 		return () => {
 			clearTimeout(t);
 			cancelAnimationFrame(raf);
-			window.removeEventListener("resize", place);
-			window.removeEventListener("scroll", onScrollPlace);
+		window.removeEventListener("resize", place);
+		window.removeEventListener("scroll", onScrollPlace);
 		};
 	});
 	onDestroy(() => clearInterval(iv));
 </script>
 
 {#if spotPath}
-	<!-- fire 50: the forced-tour fuzz — dims everything outside the lit spots
-	     and blocks clicks there; the evenodd holes pass events through.
+	<!-- fire 78 (H5): clicking the dimmed fuzz advances the tour (the twin of
+	     the 2D guide's escape) — the dock's Predict row was click-blocked at
+	     beats 0-1 and read as "no predict game".
 	     fire 79 (I2): the GLASS — a backdrop-blur layer masked by the same
-	     holes sits UNDER this path, so the rest of the screen reads as dimmed
-	     frosted glass; the path itself keeps only the click blocking
-	     (transparent fill), and clicking the glass advances the tour. If the
-	     CSS mask ever fails we lose the blur, never the whole screen. -->
+	     holes sits UNDER the click-blocker path (transparent fill now) -->
 	<div
 		class="glass"
 		on:wheel|preventDefault={() => {}}
@@ -328,15 +296,15 @@
 	</svg>
 {/if}
 
-<div class="guide" class:collapsed={$detGuideCollapsed} bind:this={cardEl}>
-	{#if !parked && !$detGuideCollapsed}
+<div class="guide" class:collapsed={$det3GuideCollapsed} bind:this={cardEl}>
+	{#if !parked && !$det3GuideCollapsed}
 		<span class="arrow {arrowSide}" style:top="{arrowTop}px" aria-hidden="true" />
 	{/if}
 	<div class="head">
 		<span class="title"><BookOpen size={15} /> Your guide</span>
-		<button class="fold" on:click={() => detGuideCollapsed.update((v) => !v)} aria-label={$detGuideCollapsed ? "Show the guide" : "Hide the guide"}>
-			{$detGuideCollapsed ? "Show guide" : "Hide guide"}
-			{#if $detGuideCollapsed}
+		<button class="fold" on:click={() => det3GuideCollapsed.update((v) => !v)} aria-label={$det3GuideCollapsed ? "Show the guide" : "Hide the guide"}>
+			{$det3GuideCollapsed ? "Show guide" : "Hide guide"}
+			{#if $det3GuideCollapsed}
 				<ChevronDown size={14} />
 			{:else}
 				<ChevronUp size={14} />
@@ -344,7 +312,7 @@
 		</button>
 	</div>
 
-	{#if !$detGuideCollapsed}
+	{#if !$det3GuideCollapsed}
 		{#if beat}
 			<div class="beat">
 				<div class="beat-head">
@@ -366,7 +334,7 @@
 			</div>
 		{:else}
 			<p class="done">
-				You're on your own now — the round buttons below keep Score.
+				You're on your own now — the dock keeps Score across rounds.
 				<button class="reopen" on:click={reopen}>Replay the guide</button>
 			</p>
 		{/if}
@@ -377,8 +345,7 @@
 	.guide {
 		@apply fixed z-50 w-80 rounded-xl border border-[#50fa7b40] bg-[rgba(13,13,24,0.94)] p-3.5 shadow-[0_0_24px_rgba(0,0,0,0.5)];
 		left: -9999px; /* positioned by place() on mount */
-		/* fire 79 (I2): the traveling card is click-through except its own
-		   buttons — a card resting over the canvas can never block guesses */
+		/* fire 79 (I2): the traveling card is click-through except its buttons */
 		pointer-events: none;
 	}
 	.guide button {
@@ -465,8 +432,7 @@
 		pointer-events: none;
 	}
 	.spotlight path {
-		fill: transparent; /* fire 79 (I2): the glass layer owns the tint now —
-		                      this path only blocks clicks */
+		fill: transparent; /* fire 79 (I2): the glass layer owns the tint now */
 		pointer-events: auto;
 	}
 	/* fire 79 (I2): the frosted-glass blackout, cut by the shared hole mask */

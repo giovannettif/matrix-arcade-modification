@@ -15,7 +15,7 @@
 	import Action from "./Action.svelte";
 	import Section from "./Section.svelte";
 	import B from "./B.svelte";
-	import { Grab, Crosshair } from "lucide-svelte";
+	import { Grab, Crosshair, Move3d } from "lucide-svelte";
 	import ActionIcon from "./ActionIcon.svelte";
 	import InteractionsList from "./InteractionsList.svelte";
 	import { gsap, ScrollTrigger } from "$utils/gsap.js";
@@ -312,7 +312,16 @@
 			</Action>
 		</div>
 	</Section>
+</div>
 
+<!-- fire 100 (PLAN-FIRE100): the det region is its OWN column + pin container
+     (#det-article, a sibling of #article) — the station spans pin it and
+     nothing else does. Two relocations from the first wrapper attempt: as a
+     CHILD of #article the transform-pin tracked #article's translateX
+     (measured: the pinned container drifted +5000px); as a sibling it has no
+     transformed ancestor and pins with the standard fixed type. The classes
+     mirror #article's column so the det sections render identically. -->
+<div id="det-article" class="relative max-w-prose bg-gradient-to-l from-base-100 via-base-300 via-90% py-12">
 	<!-- CS375 modification: the determinant story — see documentation/PLAN.md -->
 	<!-- tall runway so the original section's ending fully exits the viewport
 	     before the det story's text arrives (issue-02) -->
@@ -335,7 +344,8 @@
 			<Term>determinant</Term> measures what happens to that area.
 		</P>
 
-		<div class="h-[450px]" />
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
 
 		<P id="det-st-2">
 			Watch: this matrix stretches the square's area to <B>exactly double</B>. That factor is
@@ -343,32 +353,39 @@
 			square: <B>every shape's area scales by the same amount</B>.
 		</P>
 
-		<div class="h-[450px]" />
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
 
 		<P id="det-st-3">
-			The sign matters too. A <B>negative determinant</B> flips the plane over — the area is
-			still scaled by the same factor, but the <B>orientation reverses</B>: clockwise becomes
-			counterclockwise.
+			The sign matters too. The area is scaled by the magnitude <Tex expr={"|\\det(A)|"} /> —
+			the same factor whether <Tex expr={"\\det(A)"} /> is positive or negative — while the
+			<B>sign</B> only records <B>orientation</B>: a <B>negative determinant</B> flips the
+			plane over, so clockwise becomes counterclockwise.
 		</P>
 
-		<div class="h-[450px]" />
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
 
 		<P id="det-st-4">
-			And when <Tex expr={"\\det(A) = 0"} />? The entire plane is <B
-				>squashed onto a single line</B
-			>. Every square becomes a segment; every area becomes zero. Watch the two marked
-			points: different inputs, <B>same output</B>.
+			And when <Tex expr={"\\det(A) = 0"} />? The plane <B>collapses</B> — this example squashes
+			it onto a single line, and a matrix can even collapse everything into a single point.
+			Either way, every square becomes a segment or a point; every area becomes zero. Watch the
+			two marked points: different inputs, <B>same output</B>.
 		</P>
 
-		<div class="h-[450px]" />
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
 
 		<P id="det-st-5">
-			That is why collapsed matrices have no inverse: the transformation <B
-				>throws information away</B
-			>, so there is nothing left to undo. <Term>No determinant, no inverse</Term>.
+			That is why a square matrix with <Tex expr={"\\det(A) = 0"} /> has no inverse: the
+			transformation <B>throws information away</B>, so there is nothing left to undo.
+			<Term>If det(A) = 0, the matrix has no inverse</Term>. (The determinant itself still
+			exists — it is exactly <Tex expr={"0"} /> in this case.)
 		</P>
 
-		<div class="h-[450px]" />
+		<!-- fire 100: the try-it hand-off needs its travel back — span 5's hold
+		     ends here and det-st-6's center-cross must arrive AFTER it -->
+		<div class="h-[950px]" />
 
 		<div class="exclude">
 			<p id="det-st-6">
@@ -389,9 +406,96 @@
 		</div>
 	</Section>
 
-	<!-- tail runway: guarantees det-st-6 (the try-it step) can reach the viewport
-	     center at max scroll even when the pin-spacer calibration runs short -->
+	<!-- CS375 modification: the 3D determinant story (P5.1/P5.2) — the camera
+	     swaps to the house 3D pose for this section; the dock appears at
+	     det3d-st-6 (the try-it step), mirroring the 2D det pattern -->
 	<div class="h-[700px]" />
+	<Section id="section-det3d" classNames="animate bg-gradient-to-l from-base-100 via-base-300 via-90%">
+		<h2 class="text-neutral">The Determinant in 3D: Volume and Invertibility</h2>
 
-	<!-- TODO: Composition of matrices -->
+		<p>
+			None of this is special to flatland. In three dimensions the determinant measures
+			<B>volume</B>: the unit cube becomes a parallelepiped, and the determinant tells you
+			how many times <B>bigger</B> it gets — and whether it got <B>flipped inside out</B>.
+		</p>
+
+		<div class="h-[450px]" />
+
+		<P id="det3d-st-1">
+			Here is the <B>unit cube</B> — volume exactly <Tex expr="1" />. Every 3×3 matrix
+			transforms it into a slanted box, and the determinant measures what happens to that
+			volume.
+		</P>
+
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
+
+		<P id="det3d-st-2">
+			This matrix <B>doubles the volume</B> — <Tex expr={"\\det(A) = 2"} />. Same rule as the
+			plane, one dimension up: <B>every solid's volume scales by the same factor</B>.
+		</P>
+
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
+
+		<P id="det3d-st-3">
+			A <B>negative determinant</B> turns the box <B>inside out</B> — a mirror reflection. The
+			volume scales by the magnitude <Tex expr={"|\\det(A)|"} />; the <B>sign</B> only records
+			the <B>orientation</B> flip.
+		</P>
+
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
+
+		<P id="det3d-st-4">
+			And when <Tex expr={"\\det(A) = 0"} />? Space <B>collapses</B> — this example squashes the
+			cube flat onto a plane, while other singular matrices can flatten it onto a line or even
+			a point. In every case the volume becomes zero. Watch the two marked points inside it:
+			different inputs, <B>same output</B>.
+		</P>
+
+		<!-- fire 92 (P2): the original travels ~64px of prose between stations while each station HOLDS ~1000px of pinned scroll -->
+		<div class="h-[96px]" />
+
+		<P id="det3d-st-5">
+			Flat means <B>no inverse</B> in 3D too: whenever a square matrix has <Tex
+				expr={"\\det(A) = 0"} />, the transformation <B>throws information away</B> — here, a
+			whole dimension of it — so there is nothing left to undo. <Term
+				>If det(A) = 0, the matrix has no inverse</Term
+			>.
+		</P>
+
+		<div class="h-[950px]" />
+
+		<div class="exclude">
+			<p id="det3d-st-6">
+				Now <B>break the cube yourself</B> — the 3×3 controls are on the left. When you can
+				flatten it, take the prediction challenges: <B>click the floor</B> to place your
+				guess, drag the <B>height slider</B> to finish it.
+			</p>
+			<Action>
+				<ul class="list-none">
+					<li>
+						<ActionIcon icon={Crosshair} />
+						<B>Predict</B> — use the round buttons on the left panel, click the floor for
+						(x, y), then set the height with the slider and lock it in
+					</li>
+					<li>
+						<ActionIcon icon={Move3d} />
+						<B>Right-drag</B> to orbit the box and inspect it from any angle
+					</li>
+				</ul>
+			</Action>
+		</div>
+	</Section>
+
+	<!-- tail runway: fire 101 doubled-plus — the 3D story's last spans must
+	     RELEASE well before the footer on every calibration (on compact rolls
+	     their +=1000 windows reached past the footer's top, holding the story
+	     text over the credits), and det-st-6/det3d-st-6 still need their
+	     center-cross reachable at max scroll -->
+	<div class="h-[4700px]" />
 </div>
+
+<!-- TODO: Composition of matrices -->
+

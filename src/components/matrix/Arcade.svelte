@@ -47,6 +47,13 @@
 	} from "$stores";
 	// CS375: det story step — Maxwell is hidden while the determinant section plays
 	import { detStep } from "$stores/det.js";
+	import { createDetPins } from "$stores/detPins.js";
+	// fire 65 (FIX-C): the 3D det chapter's step — every "hide when the det
+	// section owns the canvas" gate below keyed only on the 2D detStep, so
+	// the original's content (near-black backdrop planes, cat, narrative
+	// vectors, data fields, lattice) showed through the whole 3D det story
+	import { det3dStep } from "$stores/det3.js";
+	import { detApproached } from "$stores/det.js";
 	import {
 		colorVector,
 		colorX,
@@ -172,6 +179,14 @@
 			$matrixTransform = $heroMatrix;
 			// } else if (!$showPlayground) {
 			// 	$matrixTransform = $customMatrix;
+		} else if ($detStep >= 1) {
+			// REG-2: the det story and try-it own the canvas, and the transformed
+			// grid group is visible BY DESIGN at the try-it (detStep 6) as the
+			// identity-warped playground grid. A load that jumps past the
+			// original's narrative tweens leaves the local `matrix` spring at a
+			// mid-narrative shear, which then rendered over the sandbox as a
+			// diagonal line lattice — pin the warp to identity for every det step.
+			$matrixTransform = initMatrix;
 		} else {
 			$matrixTransform = matrix;
 		}
@@ -2223,6 +2238,18 @@
 				pinnedContainer: "#article"
 			});
 		});
+
+		// fire 100 (PLAN-FIRE100): the det spans pin #det-article — their OWN
+		// container — so this is no longer 23 pins of one element (the four
+		// failures in fires 81/92/93 all shared that premise). Same batch as
+		// st-1..13, the proven creation moment. The health guard in detPins.js
+		// (collapse OR scroll-flow detach) falls back to rect mode if anything
+		// still corrupts.
+		try {
+			createDetPins();
+		} catch (err) {
+			console.error("[det] createDetPins threw:", err);
+		}
 	}
 
 	function updateStProgress(progress) {
@@ -2271,7 +2298,7 @@
 	coords={vectorCoords}
 	color={colorVector}
 	texOpacity={props.vectorTexOpacity}
-	visible={props.xVisible && $detStep === 0}
+	visible={props.xVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 	dim3={props.vectorDim3}
 />
 
@@ -2281,7 +2308,7 @@
 	coords={[0, 0, 0, ...$vectorCoordsSpring]}
 	color={colorVector}
 	tex={false}
-	visible={basisAltProps.vectorVisible && $detStep === 0}
+	visible={basisAltProps.vectorVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 />
 
 <!-- Basis vectors -->
@@ -2293,7 +2320,7 @@
 	scalar={props.xScalar}
 	scalarOpacity={props.xScalarOpacity}
 	scalarAlign={props.xScalarAlign}
-	visible={props.xVisible && $detStep === 0}
+	visible={props.xVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 	dim3={props.xDim3}
 />
 <Vector
@@ -2304,7 +2331,7 @@
 	scalar={props.yScalar}
 	scalarOpacity={props.yScalarOpacity}
 	scalarAlign={props.yScalarAlign}
-	visible={props.yVisible && $detStep === 0}
+	visible={props.yVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 	dim3={props.yDim3}
 />
 <Vector
@@ -2315,7 +2342,7 @@
 	scalar={props.zScalar}
 	scalarOpacity={props.zScalarOpacity}
 	scalarAlign={props.zScalarAlign}
-	visible={props.zVisible && $detStep === 0}
+	visible={props.zVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 	dim3={props.zDim3}
 />
 
@@ -2325,21 +2352,21 @@
 	coords={[0, 0, 0, 1, 0, 0]}
 	color={colorX}
 	tex={false}
-	visible={basisAltProps.xVisible && $detStep === 0}
+	visible={basisAltProps.xVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 />
 <Vector
 	view={transformedView}
 	coords={[0, 0, 0, 0, 1, 0]}
 	color={colorY}
 	tex={false}
-	visible={basisAltProps.yVisible && $detStep === 0}
+	visible={basisAltProps.yVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 />
 <Vector
 	view={transformedView}
 	coords={[0, 0, 0, 0, 0, 1]}
 	color={colorZ}
 	tex={false}
-	visible={basisAltProps.zVisible && $detStep === 0}
+	visible={basisAltProps.zVisible && $detStep === 0 && $det3dStep === 0 && !$detApproached}
 />
 
 <!-- FIXME: Change blending mode of grid? -->
@@ -2349,36 +2376,57 @@
 
 <!-- Transformed elements -->
 <!-- TODO: Overlay another grid in the hero for a cool effect? -->
-<!-- hidden during STORY steps (1-5, the det shapes own the canvas) but shown
-     at the try-it (6) where it is the playground's grid, identity-warped —
-     the det code resets endMatrix for the try-it's duration -->
-<T.Group renderOrder={-2} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0 || $detStep === 6}>
+<!-- fire 50 (user: entering the det section swapped the grid): this group is
+     ALWAYS mounted — visibility is owned purely by the transformedGridToggled
+     fade (fadeDistance), the house pattern. The old visible={$detStep === 0
+     || $detStep === 6} gate hard-hid the bright grid during story steps 1-5,
+     so the engines' transformedGridToggled=true flips never rendered and the
+     story played over the dim slate grid — the "grid disappears and a new
+     one appears" the user saw. -->
+<T.Group renderOrder={-2} matrix={$matrixTransform} matrixAutoUpdate={false}>
 	<!-- Grids -->
 	<!-- FIXME: Don't do infinite grid? A bit confusing -->
 
 	<Grid {...transformedGridProps} axes={"xyz"} />
 </T.Group>
 
-<!-- the 3D grids stay hidden during the whole det story (steps AND try-it):
-     under the try-it's top-down camera they project as diagonal streaks -->
-<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
+<!-- fire 59: the wall grids now play the ORIGINAL's 2D<->3D choreography in
+     the det section too — they deflate/grow with grid3dProps.t + thickness
+     (the visible gate is gone, matching the original which has none). The
+     engines stage the store flips so the walls shrink while the camera
+     swings down into the det story and grow as the 3D chapter swings up;
+     by the time any top-down camera rests, t is already 0 (no streaks).
+     fire 102 (the section-2 cube bleed): these two walls ARE the cube
+     geometry st-9..st-12 build, and st-9's SCRUBBED timeline re-renders its
+     end pose (t 1 + full thickness) on every scroll tick even past its range
+     (the fire-100 scrub finding) — so the engines' grid3dToggled=false flips
+     lost the fight and the walls bled through the det approach and story.
+     The thickness gates below mirror the fire-81 house gates: while the det
+     region owns the canvas the walls render at 0 regardless of what the
+     scrub writes back into grid3dProps; outside it the original's own
+     choreography applies untouched. -->
+<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false}>
 	<!-- 3d grid -->
 	<Grid
 		axes={"xzy"}
 		position.z={gridSectionSize * 0}
 		position.y={gridSectionSize}
 		{...grid3dProps}
+		cellThickness={$detStep === 0 && $det3dStep === 0 && !$detApproached ? grid3dProps.cellThickness : 0}
+		sectionThickness={$detStep === 0 && $det3dStep === 0 && !$detApproached ? grid3dProps.sectionThickness : 0}
 	/>
 	<Grid
 		axes={"zyx"}
 		position.z={gridSectionSize * 0}
 		position.x={-gridSectionSize}
 		{...grid3dProps}
+		cellThickness={$detStep === 0 && $det3dStep === 0 && !$detApproached ? grid3dProps.cellThickness : 0}
+		sectionThickness={$detStep === 0 && $det3dStep === 0 && !$detApproached ? grid3dProps.sectionThickness : 0}
 	/>
 </T.Group>
 
 <!-- Maxwell the carryable cat -->
-<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0}>
+<T.Group renderOrder={-4} matrix={$matrixTransform} matrixAutoUpdate={false} visible={$detStep === 0 && $det3dStep === 0 && !$detApproached}>
 	{#await useGltf(`${assets}/maxwell.glb`) then model}
 		<T
 			is={model.scene}
@@ -2422,10 +2470,10 @@
      they stay mounted and hide through their own reveal transitions whenever
      the det story owns the canvas (user: "a bunch of clutter that hides what
      we are trying to explain") -->
-<Planes view={transformedView} t={$detStep === 0 ? planesProps.t : 0} />
-<Points view={transformedView} t={$detStep === 0 ? pointsProps.t : 0} />
-<Planes view={transformedView} t={$detStep === 0 ? planes3dProps.t : 0} dim3 />
-<Points view={transformedView} t={$detStep === 0 ? points3dProps.t : 0} dim3 />
+<Planes view={transformedView} t={$detStep === 0 && $det3dStep === 0 && !$detApproached ? planesProps.t : 0} />
+<Points view={transformedView} t={$detStep === 0 && $det3dStep === 0 && !$detApproached ? pointsProps.t : 0} />
+<Planes view={transformedView} t={$detStep === 0 && $det3dStep === 0 && !$detApproached ? planes3dProps.t : 0} dim3 />
+<Points view={transformedView} t={$detStep === 0 && $det3dStep === 0 && !$detApproached ? points3dProps.t : 0} dim3 />
 <!-- <Sphere view={transformedView} /> -->
 <!-- <Circle view={transformedView} /> -->
 
@@ -2443,19 +2491,24 @@
 	rotation={[-Math.PI / 2, 0, 0]}
 	t={grid3dProps.t}
 /> -->
+<!-- fire 50 (user: "patches of black in the grid"): these near-black mathbox
+     backdrop surfaces ride grid3dProps.t — the det3d story's grid3dToggled
+     flip faded them back IN over the bright floor grid, painting dark
+     patches. They hide through their own reveal whenever the det section
+     owns the canvas (the same pattern as the data fields above). -->
 <Plane
 	view={transformedView}
 	dim={planeDim}
 	position={[-planeDim / 2, -planeDim / 2, -planeDim / 2]}
 	rotation={[0, -Math.PI / 2, 0]}
-	t={grid3dProps.t}
+	t={$detStep === 0 && $det3dStep === 0 && !$detApproached ? grid3dProps.t : 0}
 />
 <Plane
 	view={transformedView}
 	dim={planeDim}
 	position={[-planeDim / 2, planeDim / 2, planeDim / 2]}
 	rotation={[-Math.PI / 2, 0, 0]}
-	t={grid3dProps.t}
+	t={$detStep === 0 && $det3dStep === 0 && !$detApproached ? grid3dProps.t : 0}
 />
 
 <!-- mathbox vector lattice — same reveal-driven hiding as the data fields:
@@ -2463,6 +2516,6 @@
      would otherwise float the lattice over the det story and try-it -->
 <Vectors
 	view={transformedView}
-	enter={$detStep === 0 ? vectorsProps.enter : 0}
-	exit={$detStep === 0 ? vectorsProps.exit : 1}
+	enter={$detStep === 0 && $det3dStep === 0 && !$detApproached ? vectorsProps.enter : 0}
+	exit={$detStep === 0 && $det3dStep === 0 && !$detApproached ? vectorsProps.exit : 1}
 />

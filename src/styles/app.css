@@ -84,6 +84,11 @@ body.det-story #canvas-wrapper span.whitespace-nowrap {
 
 /* coordinate chip for the prediction games: the marked point's coordinates,
    the hover ghost's live readout — never intercepts pointer events */
+#canvas-wrapper .det-chip,
+#canvas-wrapper .det-corner,
+#canvas-wrapper .det-corner-dot {
+	pointer-events: none;
+}
 #canvas-wrapper .det-chip {
 	padding: 2px 8px;
 	background: rgba(13, 13, 24, 0.92);
@@ -103,6 +108,105 @@ body.det-asking #canvas-wrapper {
 	cursor: crosshair;
 }
 
+/* P3.1: floating try-it collapse/expand toggle — stays on screen in both
+   states so a collapsed split view can always bring the controls back.
+   Look mirrors the original's playground button (daisyUI btn + blur). */
+
+/* RUN 49 QA catch: the prediction games were unclickable — DetGame's
+   Svelte-scoped `.head :global(button) { pointer-events: auto }` re-enable
+   never made it into the built CSS, so the mode buttons inherited
+   pointer-events: none from the full-width head/overlay (whose empty halves
+   must not swallow canvas clicks). Re-enable globally; any declared value on
+   the button beats inheritance from .head. */
+.head button {
+	pointer-events: auto;
+}
+
+/* P1.3: named corner letters on the det shape (O, A, B, C) and the
+   parallelogram-law diagonal label — letters carry the position chips,
+   colored to match the column vector that lands there. Fire 20: 17px so the
+   letters read beside the corner dots */
+#canvas-wrapper .det-corner {
+	font-family: "Chivo Variable", ui-sans-serif, sans-serif;
+	font-size: 17px;
+	font-weight: 800;
+	color: #f8f8f2;
+	text-shadow: 0 1px 6px rgba(13, 13, 24, 0.9);
+	white-space: nowrap;
+	pointer-events: none;
+	user-select: none;
+	margin-right: 3px;
+}
+
+/* fire 20 (user polish): a dot pins each corner exactly — the letter anchors
+   hug it, so the pairing reads at a glance */
+#canvas-wrapper .det-corner-dot {
+	display: block;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: #f8f8f2;
+	box-shadow: 0 0 0 2px rgba(13, 13, 24, 0.65), 0 1px 6px rgba(13, 13, 24, 0.9);
+	pointer-events: none;
+	user-select: none;
+}
+
+/* P1.3: the live determinant card — floats top-left over the canvas during
+   story steps 2-5 (the toolbar is hidden there). pointer-events: none so it
+   can never swallow canvas interactions */
+.det-formula-card {
+	position: fixed;
+	left: 1rem;
+	top: 5.25rem;
+	z-index: 30;
+	pointer-events: none;
+	padding: 10px 14px;
+	background: rgba(13, 13, 24, 0.92);
+	border: 1px solid rgba(248, 248, 242, 0.25);
+	border-radius: 12px;
+	font-family: "Chivo Variable", ui-sans-serif, sans-serif;
+	color: #f8f8f2;
+}
+.det-formula-eq {
+	font-size: 15px;
+	opacity: 0.9;
+	margin-bottom: 4px;
+}
+.det-formula-eq .katex {
+	font-size: 1em;
+}
+.det-formula-live {
+	font-size: 15px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+.det-formula-op {
+	opacity: 0.65;
+	margin: 0 3px;
+}
+.det-formula-value {
+	font-size: 17px;
+}
+.det-formula-value.flipped {
+	color: #ff79c6;
+}
+.det-formula-value.collapsed {
+	color: #bd93f9;
+}
+.det-formula-state {
+	margin-top: 3px;
+	font-size: 12px;
+	opacity: 0.75;
+}
+.det-formula-state.flipped {
+	color: #ff79c6;
+	opacity: 1;
+}
+.det-formula-state.collapsed {
+	color: #bd93f9;
+	opacity: 1;
+}
+
 /* The hero title fades out via an ancestor's opacity but keeps hit-testing:
    its 944×384 box silently swallows canvas clicks across the try-it's prime
    answer zone (upstream quirk — the original's playground has it too). The
@@ -110,4 +214,41 @@ body.det-asking #canvas-wrapper {
    clicks fall through there. */
 body.det-story #title {
 	pointer-events: none;
+}
+
+/* fire 80 (I4): the asked point's pulse ring — "know what you're answering":
+   a pulsing halo on the input corner the round is asking about */
+#canvas-wrapper .det-pulse-ring {
+	display: block;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 3px solid #f1fa8c;
+	box-shadow: 0 0 12px rgba(241, 250, 140, 0.6);
+	animation: det-pulse 1.1s ease-in-out infinite;
+	pointer-events: none;
+	user-select: none;
+}
+@keyframes det-pulse {
+	0%,
+	100% {
+		transform: scale(0.85);
+		opacity: 0.65;
+	}
+	50% {
+		transform: scale(1.3);
+		opacity: 1;
+	}
+}
+
+
+/* fire 104 (F4): the det story's pinned container + Chrome's scroll
+   anchoring fought each other — scrolling down through the pinned det
+   region teleported the scroll back up (Chrome re-anchors when the pin
+   state changes shift the anchor node). Kill anchoring over the pinned
+   column and GSAP's spacers; the det region's own scroll math owns it. */
+#det-article,
+#article,
+.pin-spacer {
+	overflow-anchor: none;
 }

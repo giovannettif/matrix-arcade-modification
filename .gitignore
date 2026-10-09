@@ -5,3 +5,7 @@ node_modules
 build
 functions
 .env
+
+# fire 102+: the user wants code only in the repo
+documentation/
+nul
