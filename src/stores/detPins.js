@@ -154,6 +154,20 @@ export function clearDetSpacerLocks() {
 	}
 }
 let spacersLockArmed = false;
+// fire 106: ST creates the shared spacer lazily (at the first pin apply), so
+// the creation-time lock can miss it — watch for the column being WRAPPED
+// and lock the fresh spacer in the same microtask, before its first engage
+// sequence can collapse the document.
+let spacerWatch = null;
+function armSpacerWatch() {
+	if (spacerWatch || typeof window === "undefined") return;
+	const col = document.getElementById("det-article");
+	if (!col || !col.parentNode) return;
+	spacerWatch = new MutationObserver(() => {
+		if (get(detPinsLive)) lockDetSpacerHeights();
+	});
+	spacerWatch.observe(col.parentNode, { childList: true });
+}
 
 // the shared teardown: below-lg clears and the health guard both land here;
 // after it the rect machines take over seamlessly (pins stay off for the
@@ -442,6 +456,7 @@ export function createDetPins() {
 			if (get(detPinsLive)) lockDetSpacerHeights();
 		});
 	}
+	armSpacerWatch();
 	lockDetSpacerHeights();
 	detPinsLive.set(true);
 	watchHealth(document.documentElement.scrollHeight);
