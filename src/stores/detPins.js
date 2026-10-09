@@ -132,6 +132,29 @@ export function span1Progress() {
 	return Math.max(0, Math.min(1, (y - st.start) / span));
 }
 
+// fire 106 (the probe's verdict — the user's dump: at every det pin engage
+// the shared spacer's height contribution collapses for one layout pass
+// (measured -14368px, pos cycling fixed->relative) and Chrome clamps
+// scrollY into the shrunken document BEFORE the padding is re-applied
+// (measured dY -814/-846) — the clamp sticks, dropping the user back below
+// the pin start: the infinite intro loop). Locking each spacer's measured
+// height as an inline min-height makes the transient invisible to the
+// document box; re-locked after every refresh, cleared before teardown.
+export function lockDetSpacerHeights() {
+	if (typeof window === "undefined") return;
+	for (const s of document.querySelectorAll(".pin-spacer")) {
+		const h = s.getBoundingClientRect().height;
+		if (h > 0) s.style.minHeight = `${Math.round(h)}px`;
+	}
+}
+export function clearDetSpacerLocks() {
+	if (typeof window === "undefined") return;
+	for (const s of document.querySelectorAll(".pin-spacer")) {
+		s.style.minHeight = "";
+	}
+}
+let spacersLockArmed = false;
+
 // the shared teardown: below-lg clears and the health guard both land here;
 // after it the rect machines take over seamlessly (pins stay off for the
 // session — nothing re-creates them once the original's animate() has run)
@@ -146,6 +169,9 @@ export function killDetPins() {
 	stationTriggers2D = [];
 	stationTls3D = [];
 	stationTriggers3D = [];
+	// fire 106: unmin the spacers BEFORE the refresh so it measures the true
+	// reverted layout (the refresh listener re-locks the new truth after)
+	clearDetSpacerLocks();
 	if (get(detPinsLive)) {
 		detPinsLive.set(false);
 		ScrollTrigger.refresh();
@@ -406,6 +432,17 @@ export function createDetPins() {
 	// the user experienced as the scroll repeatedly jumping back up. The
 	// durable fix is LAYOUT: the 3D tail runway now gives the last spans room
 	// to release before the footer on every calibration (Article.svelte).
+	// fire 106: the anti-clamp lock (see lockDetSpacerHeights) — armed at
+	// creation and re-armed after every refresh (pins live only — after a
+	// teardown the spacers return to natural flow and must not be pinned to
+	// a stale height), so recalibrations stay clamped-proof too.
+	if (!spacersLockArmed) {
+		spacersLockArmed = true;
+		ScrollTrigger.addEventListener("refresh", () => {
+			if (get(detPinsLive)) lockDetSpacerHeights();
+		});
+	}
+	lockDetSpacerHeights();
 	detPinsLive.set(true);
 	watchHealth(document.documentElement.scrollHeight);
 }

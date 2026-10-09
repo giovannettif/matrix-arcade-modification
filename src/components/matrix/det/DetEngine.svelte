@@ -115,6 +115,7 @@
 		lastSpanEnd,
 		span1Progress,
 		spanScrub2D,
+		lockDetSpacerHeights,
 		pinsSnapshot,
 		retryCreateDetPins,
 		assertDetReadingShift,
@@ -1405,14 +1406,20 @@
 		try {
 			updateApproach();
 		} catch (e) {}
-		// fire 105b (the fast-scroll leftover): a jump past the pin release
-		// leaves gsap's cached y on the column (up to 6500 = 5 holds) — the
-		// assert zeroes it; the ST hooks alone miss loads where no toggle or
-		// refresh fires after the jump. Poll-side enforcement self-heals.
+		// fire 106 (the probe's verdict): at each pin engage ST's multi-pin
+		// bookkeeping momentarily drops the shared spacer's height contribution
+		// (user dump: -14368 for one layout pass) — Chrome clamps scrollY into
+		// the shrunken document (dY -814/-846) before the padding is restored,
+		// and the clamp sticks: back below the pin start, infinite loop. The
+		// spacers' measured heights are held as inline min-heights (locked at
+		// creation + refresh; re-locked here so a spacer created late at its
+		// first engage is covered too) — the transient can never shrink the
+		// document below the user again.
 		try {
 			if (pinsLive()) {
 				assertDetReleased();
 				assertDetReadingShift();
+				lockDetSpacerHeights();
 			}
 		} catch (e) {}
 		// fire 92 (the re-anchor): with the pins live the station triggers —
