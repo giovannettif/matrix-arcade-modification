@@ -50,6 +50,7 @@
 		detScrubTo
 	} from "$stores/det.js";
 	import { det3dStep } from "$stores/det3.js";
+	import { initScrollProbe } from "$utils/scrollProbe.js";
 
 	// REG-mode QA probe, DEV builds only (2D counterpart of __camdev /
 	// __det3dev): reads the live world-layer stores so automation can tell
@@ -393,7 +394,16 @@
 	// the SAME -65ch reading-shift dance (the flex row parks it right of the
 	// canvas; the shift is what slides a column into the reading position).
 	// Every #article layout tween below has this twin.
+	// fire 106: while a station pin holds the column (position: fixed) ST
+	// owns its positioning — the reading offset is baked into `left` and the
+	// transform must stay CLEAN. The story entry fired this DURING span 1's
+	// hold, re-adding translateX on top of the baked left: the held text
+	// double-shifted 65ch for the whole span (and the saved-style restore at
+	// release then diverged from what we wrote mid-hold). Holds are skipped;
+	// the next poll's assert re-asserts the flow shift after release.
 	function slideDetColumn(tx, duration = 0.3) {
+		const col = document.getElementById("det-article");
+		if (col && getComputedStyle(col).position === "fixed") return;
 		gsap.to("#det-article", { duration, translateX: tx, overwrite: "auto" });
 	}
 
@@ -1784,6 +1794,11 @@
 
 	onMount(() => {
 		mounted = true;
+		// fire 106: opt-in diagnostics for the pin-boundary scroll teleport
+		// (inert without ?scrollprobe / localStorage.scrollProbe)
+		try {
+			initScrollProbe();
+		} catch (e) {}
 		// fire 93: the station pins are created by Arcade's animate() batch via detPins.js —
 		// settle gate from the poll — never at mount (the fire-81 collapse)
 		// the poll starts FIRST and is throw-safe: a failure anywhere in the

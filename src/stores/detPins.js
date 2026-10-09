@@ -227,10 +227,15 @@ export function assertDetReadingShift() {
 	const el = document.getElementById("det-article");
 	if (!el) return;
 	if (get(detStep) === 6 && get(detTryExpanded)) return;
-	// while a station pin holds the element (position: fixed) ScrollTrigger
-	// has already moved the reading offset into `left` and cleared the
-	// transform — re-asserting x there would double-shift the pinned column
-	if (getComputedStyle(el).position === "fixed") return;
+	// fire 106: during a fixed hold ScrollTrigger owns top/left (the reading
+	// offset lives in `left`) — but a stale y translate still VISUALLY shifts
+	// the whole pinned column (the fire-105b measurement showed hold-multiple
+	// y surviving; the old early-return here protected it). Zero the
+	// transform's y only — top/left stay ST's.
+	if (getComputedStyle(el).position === "fixed") {
+		gsap.set(el, { y: 0 });
+		return;
+	}
 	// fire 105b (the fast-scroll leftover, the user: "scrolling to the bottom
 	// too fast causes the det part to go off the page past the ending"):
 	// jumping past the release leaves a stale y-translate in gsap's cache on
