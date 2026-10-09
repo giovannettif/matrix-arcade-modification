@@ -442,8 +442,19 @@
 			// their windows; the 2D family unaffected). 4 consecutive stale polls
 			// deep inside span3[0] -> kill the 3D spans; the rect machine and its
 			// footer-anchored band take the 3D story back.
+			// fire 105b: the stale test now requires the scroll to still be
+			// INSIDE span3[0]'s window — merely being PAST its start also reads
+			// progress 0 for a few polls after a fast transit (scrub + rAF lag),
+			// and the old test killed the whole family on every fast scroll
+			// through the 3D chapter (the user's fast-scroll scenario).
 			const sp3 = detPinsSpans3();
-			if (sp3.length && window.scrollY > sp3[0].start + 400 && sp3.every((x) => !x.active && x.progress === 0)) {
+			const s3first = sp3[0];
+			if (
+				s3first &&
+				window.scrollY > s3first.start + 400 &&
+				window.scrollY < s3first.end &&
+				sp3.every((x) => !x.active && x.progress === 0)
+			) {
 				stale3Polls++;
 			} else {
 				stale3Polls = 0;
