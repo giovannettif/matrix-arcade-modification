@@ -64,6 +64,40 @@ export const detFlipped = derived(detValue, (v) => v < -0.05);
 let tween = null;
 let speedAtStart = 1;
 
+// fire 105 (the "matrix stuck at 1 0 0 1" report): every morph rides gsap's
+// rAF ticker — on a starved renderer (throttled/occluded tab, slow machine)
+// the playhead freezes at 0 while detPlaying stays true, and a prediction
+// round's reveal never appears: the world sits at the identity the whole
+// round. The engine's poll watchdog only covers the try-it (detStep 6), so
+// morphs get their own wall-clock stall watch here (timers are the one clock
+// that always runs — the house pattern): if the playhead stops advancing for
+// ~1.2s while a tween is nominally live, complete it synthetically.
+let stallWatch = null;
+let stallPh = -1;
+function disarmStallWatch() {
+	if (stallWatch) {
+		clearInterval(stallWatch);
+		stallWatch = null;
+	}
+}
+function armStallWatch() {
+	disarmStallWatch();
+	stallPh = get(detPlayhead);
+	stallWatch = setInterval(() => {
+		if (!tween || !tween.isActive() || tween.paused() || !get(detPlaying)) {
+			disarmStallWatch();
+			return;
+		}
+		const ph = get(detPlayhead);
+		if (Math.abs(ph - stallPh) > 1e-5) {
+			stallPh = ph;
+			return;
+		}
+		disarmStallWatch();
+		skipDet();
+	}, 400);
+}
+
 function startTween(duration) {
 	if (tween) tween.kill();
 	speedAtStart = get(detSpeed);
@@ -80,9 +114,11 @@ function startTween(duration) {
 			},
 			onComplete() {
 				detPlaying.set(false);
+				disarmStallWatch();
 			}
 		}
 	);
+	armStallWatch();
 }
 
 /** Morph the current shape toward a new matrix. */
@@ -103,6 +139,7 @@ export function playDet() {
 	if (tween && tween.progress() < 1 && tween.paused()) {
 		tween.resume();
 		detPlaying.set(true);
+		armStallWatch();
 	} else {
 		replayDet();
 	}
@@ -112,6 +149,7 @@ export function pauseDet() {
 	if (tween) {
 		tween.pause();
 		detPlaying.set(false);
+		disarmStallWatch();
 	}
 }
 
@@ -137,6 +175,7 @@ function logDetWrite(kind, entries) {
 
 export function skipDet() {
 	logDetWrite("skipDet", get(detTarget));
+	disarmStallWatch();
 	if (tween) tween.progress(1);
 	detPlayhead.set(1);
 	detPlaying.set(false);
@@ -148,6 +187,7 @@ export function skipDet() {
  *  engaged; entries read from→to lerped at p. */
 export function detScrubTo(fromM, toM, p) {
 	logDetWrite("detScrubTo", toM);
+	disarmStallWatch();
 	if (tween) {
 		tween.kill();
 		tween = null;

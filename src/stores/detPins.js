@@ -10,7 +10,9 @@
 // (the fire-92 re-anchor; the rect machine remains the fallback).
 import { writable, get } from "svelte/store";
 import { gsap, ScrollTrigger } from "$utils/gsap.js";
-import { detScrubTo, detStep, detTryExpanded } from "./det.js";
+// fire 105: detScrubTo moved out — the span morphs are written by the
+// engines' scroll-path poll (spanScrub2D), no longer by scrub-tween renders
+import { detStep, detTryExpanded } from "./det.js";
 import { det3ScrubTo } from "./det3.js";
 
 // the story arc matrices — canonical here; the engines import these exact
@@ -43,29 +45,67 @@ export function pinsLive() {
 	return get(detPinsLive);
 }
 export function inDetSpan() {
-	return stationTriggers2D.some((st) => st && st.isActive);
+	// fire 105: isActive is updated on gsap's rAF ticker — a starved renderer
+	// leaves it stale while the scroll sits mid-window, so pair it with the
+	// cached window against live scrollY (windows only change on refresh)
+	const y = typeof window !== "undefined" ? window.scrollY : 0;
+	return stationTriggers2D.some((st) => st && (st.isActive || (y >= st.start && y <= st.end)));
 }
 export function inDetSpan3() {
-	return stationTriggers3D.some((st) => st && st.isActive);
+	const y = typeof window !== "undefined" ? window.scrollY : 0;
+	return stationTriggers3D.some((st) => st && (st.isActive || (y >= st.start && y <= st.end)));
 }
 // the trigger-anchored story step: the deepest station whose span is active
 // or fully played (mid-span -> n; the gap after span n -> n, the original's
 // between-stations hold; above span 1 -> 0, the approach zone)
 export function triggerCurrent() {
 	let current = 0;
+	// fire 105 (the section-jump teleport): isActive/progress ride the rAF
+	// ticker — on a starved renderer they go stale mid-window, the step
+	// derivation fell to 0, and the fallback rect machines then yanked the
+	// step back and forth around the true one. The cached span window against
+	// live scrollY is starvation-proof (windows only move on refresh). The
+	// deepest STARTED span is the whole rule: spans are ordered and
+	// non-overlapping, so it yields mid-span -> n AND the gap-after-n hold
+	// (progress >= 1 is stale-prone and no longer needed for the hold).
+	const y = typeof window !== "undefined" ? window.scrollY : 0;
 	for (let n = 1; n <= 5; n++) {
 		const st = stationTriggers2D[n - 1];
-		if (st && (st.isActive || st.progress >= 1)) current = n;
+		if (st && (st.isActive || st.progress >= 1 || y >= st.start)) current = n;
 	}
 	return current;
 }
 export function triggerCurrent3() {
 	let current = 0;
+	const y = typeof window !== "undefined" ? window.scrollY : 0;
 	for (let n = 1; n <= 5; n++) {
 		const st = stationTriggers3D[n - 1];
-		if (st && (st.isActive || st.progress >= 1)) current = n;
+		if (st && (st.isActive || st.progress >= 1 || y >= st.start)) current = n;
 	}
 	return current;
+}
+// fire 105: the span morph's live state for the engines' poll — the deepest
+// started span with its scroll-mapped progress. The old pipeline rode the
+// rAF ticker twice (ScrollTrigger.progress -> scrub-tween render), so a
+// starved renderer froze the morph mid-station and snapped it forward on
+// catch-up; window math against scrollY needs no animation frame.
+export function spanScrub2D() {
+	if (typeof window === "undefined") return null;
+	const y = window.scrollY;
+	// deepest STARTED span (spans are ordered): mid-window it scrubs, past its
+	// end it holds p = 1 until the next span starts
+	let hit = null;
+	for (let n = 1; n <= 5; n++) {
+		const st = stationTriggers2D[n - 1];
+		if (!st || y < st.start) continue;
+		hit = n;
+	}
+	if (hit === null) return null;
+	const st = stationTriggers2D[hit - 1];
+	const from = hit === 1 ? STEP_MATRIX[1] : STEP_MATRIX[hit - 1];
+	const to = STEP_MATRIX[hit];
+	const p = Math.max(0, Math.min(1, (y - st.start) / Math.max(1, st.end - st.start)));
+	return { n: hit, from, to, p };
 }
 // fire 100: the last span's end scroll position per family (the try-it
 // hand-off anchor under pins — the live rects inside a pinned container
@@ -80,10 +120,16 @@ export function lastSpanEnd3() {
 }
 // fire 102: span 1's live scrub progress (0..1) — DetEngine's beat-1 drive
 // maps it onto the entrance scalars (stepInT/edgeDrawT) so the unit square
-// draws on THROUGH the ~1000px pinned hold instead of playing its one-shot
-// entrance in 0.6s and then holding static for the rest of the span
+// draws on THROUGH the ~1300px pinned hold instead of playing its one-shot
+// entrance in 0.6s and then holding static for the rest of the span.
+// fire 105: derived from the cached window + live scrollY — `progress` rides
+// the starved rAF ticker and would freeze the beat-1 drive mid-hold
 export function span1Progress() {
-	return stationTriggers2D[0]?.progress ?? 0;
+	const st = stationTriggers2D[0];
+	if (!st) return 0;
+	const span = Math.max(1, st.end - st.start);
+	const y = typeof window !== "undefined" ? window.scrollY : st.start;
+	return Math.max(0, Math.min(1, (y - st.start) / span));
 }
 
 // the shared teardown: below-lg clears and the health guard both land here;
@@ -185,7 +231,40 @@ export function assertDetReadingShift() {
 	// has already moved the reading offset into `left` and cleared the
 	// transform — re-asserting x there would double-shift the pinned column
 	if (getComputedStyle(el).position === "fixed") return;
-	gsap.set(el, { x: "-65ch" });
+	// fire 105b (the fast-scroll leftover, the user: "scrolling to the bottom
+	// too fast causes the det part to go off the page past the ending"):
+	// jumping past the release leaves a stale y-translate in gsap's cache on
+	// this element (measured: a multiple of the 1300px holds — 5200, 6500 —
+	// the fire-101 transform-pin signature at the new span length), and the
+	// column then renders that far below its flow slot: over the footer /
+	// past the document end, forever (it survives every later refresh). Out
+	// of a fixed hold the column's only intended transform is the reading
+	// shift, so y is zeroed here on every assert.
+	gsap.set(el, { x: "-65ch", y: 0 });
+}
+
+// fire 105b (the stuck release): after an instant jump past every span the
+// triggers can ALL read inactive (progress 1, srcScroll tracking) while the
+// pinned element keeps its fixed-pin inline state (position: fixed + hold
+// translate + the sizing ST froze at pin time) for the rest of the session —
+// measured live at the try-it band. ScrollTrigger's own view is the
+// authority: when no hold is live and the scroll is past the last span end,
+// restore the flow state, then the reading shift. Conservative on purpose:
+// any live isActive (even a stale one) defers to ST's ticker.
+export function assertDetReleased() {
+	const el = document.getElementById("det-article");
+	if (!el) return;
+	if (getComputedStyle(el).position !== "fixed") return;
+	const y = typeof window !== "undefined" ? window.scrollY : 0;
+	const ends = [lastSpanEnd(), lastSpanEnd3()].filter((e) => e !== null);
+	if (!ends.length || y <= Math.max(...ends) + 200) return;
+	for (const st of [...stationTriggers2D, ...stationTriggers3D]) {
+		if (st && st.isActive) return;
+	}
+	gsap.set(el, {
+		clearProps: "position,top,left,bottom,width,maxWidth,maxHeight,height,margin"
+	});
+	assertDetReadingShift();
 }
 
 // called from Arcade's animate() tail — the original's creation moment.
@@ -219,9 +298,10 @@ export function createDetPins() {
 		for (let n = 1; n <= 5; n++) {
 			const el = document.getElementById(`det-st-${n}`);
 			if (!el) continue;
-			const prev = n === 1 ? STEP_MATRIX[1] : STEP_MATRIX[n - 1];
-			const cur = STEP_MATRIX[n];
-			const proxy = { t: n === 1 ? 1 : 0 };
+			// fire 105: the timeline is kept for the PIN + toggleClass only —
+			// the morph write moved to the engines' scroll-path poll via
+			// spanScrub2D() (window math, starvation-proof; the old scrub-tween
+			// render froze on a starved rAF and snapped forward on catch-up)
 			const tl = gsap.timeline({
 				scrollTrigger: {
 					trigger: el,
@@ -256,19 +336,6 @@ export function createDetPins() {
 					onToggle: assertDetReadingShift
 				}
 			});
-			tl.to(proxy, {
-				t: 1,
-				ease: "none",
-				onUpdate: () => {
-					// fire 100 (the write-log finding): scrubbed tweens RENDER on
-					// every scroll tick even when their trigger is inactive — and
-					// all five spans write ONE shared morph, so an ungated write
-					// let the deepest span's matrix win everywhere (measured: M4
-					// at step 1). Only the active span owns the morph.
-					if (!tl.scrollTrigger.isActive) return;
-					detScrubTo(prev, cur, proxy.t);
-				}
-			}, 0);
 			stationTriggers2D.push(tl.scrollTrigger);
 			stationTls2D.push(tl);
 		}
@@ -316,7 +383,10 @@ export function createDetPins() {
 				ease: "none",
 				onUpdate: () => {
 					// fire 100: the active-span gate (the 2D twin, see above)
-					if (!tl.scrollTrigger.isActive) return;
+					// fire 105: window test against rAF-stale isActive
+					const trig = tl.scrollTrigger;
+					const y = window.scrollY;
+					if (!trig.isActive && !(y >= trig.start && y <= trig.end)) return;
 					det3ScrubTo(prev, cur, proxy.t);
 				}
 			}, 0);

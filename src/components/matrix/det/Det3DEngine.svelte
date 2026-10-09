@@ -50,7 +50,9 @@
 		retryCreateDetPins,
 		kill3DSpans,
 		detPinsSpans3,
-		pins3Live as pins3LiveRaw
+		pins3Live as pins3LiveRaw,
+		assertDetReadingShift,
+		assertDetReleased
 	} from "$stores/detPins.js";
 
 	let mounted = false;
@@ -373,6 +375,15 @@
 		// fire 101: the pin retry (the 2D twin) — re-attempt deferred creation
 		try {
 			retryCreateDetPins();
+		} catch (e) {}
+		// fire 105b (the fast-scroll leftover, the 2D twin): a jump past the
+		// release leaves gsap's cached y — or the whole fixed-pin inline
+		// state — on the column; un-stick, then zero y
+		try {
+			if (stationPinsLive3()) {
+				assertDetReleased();
+				assertDetReadingShift();
+			}
 		} catch (e) {}
 		// no section markup yet (it lands with P5.2): the poll owns no scroll
 		// mapping (forcing step 0 would fight the DEV hook), but the current

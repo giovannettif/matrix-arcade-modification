@@ -190,8 +190,17 @@
 		@apply mt-3 rounded-lg border border-[#44475a66] bg-[#0d0d18]/80 backdrop-blur-sm p-4;
 		/* fire 80 (I4): the dock's chrome — the game card matches the try-it
 		   panels instead of floating bare over the canvas */
+		/* fire 105 (the "can't predict" report): the card floats OVER the
+		   canvas and its box used to swallow the plot clicks whole — in the
+		   split view the asking question sat right where the answer had to be
+		   plotted, so clicks never reached the scene and no round could ever
+		   be submitted. The card's BOX is now click-through; only its buttons
+		   take pointers. */
+		pointer-events: none;
 	}
-	.steps {
+	.game :global(button) {
+		pointer-events: auto;
+	}	.steps {
 		@apply flex items-center justify-between gap-2 border-b border-[#44475a66] pb-2;
 	}
 	.step-label {
@@ -237,12 +246,6 @@
 	}
 	.head {
 		@apply flex flex-wrap items-center justify-between gap-2;
-		/* the head box stretches to the panel's full width; its empty right
-		   half must not swallow canvas clicks meant for the game */
-		pointer-events: none;
-	}
-	.head :global(button) {
-		pointer-events: auto;
 	}
 	.title {
 		@apply flex items-center gap-2 font-sans text-sm font-bold text-base-content;

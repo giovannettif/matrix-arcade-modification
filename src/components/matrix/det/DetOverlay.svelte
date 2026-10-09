@@ -63,7 +63,21 @@
 			<div class="pointer-events-auto">
 				<DetControls />
 			</div>
-			<div class="pointer-events-auto">
+		</div>
+		<!-- fire 105 (the user: "move the predict card to bottom left so it
+		     doesn't clutter the focus"): the game card lives in its OWN
+		     bottom-left slot now — the controls + guide own the top, the
+		     canvas center stays clear for plotting. The wrapper stays
+		     pointer-events-none and does NOT re-enable the card box: DetGame's
+		     own CSS makes only its buttons take pointers, so clicks pass
+		     through the card onto the canvas beneath it (the old card's box
+		     swallowed the plot clicks whole). -->
+		<div
+			class="fixed left-0 bottom-0 z-40 hidden px-8 py-8 pointer-events-none lg:block"
+			in:fade={{ duration: 0.3, delay: 0.2 }}
+			out:fade={{ duration: 0.3 }}
+		>
+			<div class="w-[24rem] max-w-[calc(100vw-8rem)]">
 				<DetGame />
 			</div>
 		</div>

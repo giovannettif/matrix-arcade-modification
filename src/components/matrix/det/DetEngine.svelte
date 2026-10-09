@@ -113,8 +113,11 @@
 		killDetPins,
 		lastSpanEnd,
 		span1Progress,
+		spanScrub2D,
 		pinsSnapshot,
-		retryCreateDetPins
+		retryCreateDetPins,
+		assertDetReadingShift,
+		assertDetReleased
 	} from "$stores/detPins.js";
 
 	let mounted = false;
@@ -249,6 +252,10 @@
 	// its default target (renderer.domElement at plugin-creation time) is not
 	// dependable when called from a child component. clientX/Y + the live
 	// camera make this work for real clicks and automation alike.
+	// fire 105: the listeners live on WINDOW now (see attachGameInput below) —
+	// the wrapper delegation lost clicks to everything that paints over the
+	// canvas (the game card's own box, the guide's spotlight fuzz, the
+	// article's decorative SVGs), which is the "can't predict" bug.
 	const guessRaycaster = new THREE.Raycaster();
 	const guessNdc = new THREE.Vector2();
 	// the det story lives on the z = 0.05 plane within |x|,|y| <= ~4 (grid span)
@@ -258,12 +265,9 @@
 	// camera. Analytic ray ∩ plane — independent of scene-graph matrix
 	// staleness, which matters when the render loop is throttled.
 	function planePointFromEvent(e) {
-		// resolve the canvas at event time: listeners are delegated on the
-		// stable wrapper (see onMount), so e.currentTarget is #canvas-wrapper
-		const canvas =
-			e.currentTarget && e.currentTarget.querySelector
-				? e.currentTarget.querySelector("canvas")
-				: e.currentTarget;
+		// resolve the canvas at event time — the wrapper is static DOM
+		const wrapper = document.getElementById("canvas-wrapper");
+		const canvas = wrapper ? wrapper.querySelector("canvas") : null;
 		if (!canvas) return null;
 		const r = canvas.getBoundingClientRect();
 		guessNdc.set(
@@ -293,9 +297,18 @@
 		// exactly instead of fighting decimal precision
 		return [Math.round(px * 2) / 2, Math.round(py * 2) / 2];
 	}
+	// fire 105: window-level input must not steal real UI interactions — a
+	// press on any control (buttons, spinners, sliders, the guide card) is
+	// never a plot. Everything else plots, including clicks on decorative
+	// overlays that merely PAINT above the canvas.
+	function isGameUiTarget(e) {
+		const t = e.target;
+		return !!(t && t.closest && t.closest("button, a, input, select, textarea, .det-controls, .guide"));
+	}
 	function onCanvasPointerDown(e) {
 		const game = get(detGame);
 		if (game.status !== "asking") return;
+		if (isGameUiTarget(e)) return;
 		const pt = planePointFromEvent(e);
 		if (!pt) return;
 		// fire 78 (H5, user: "make it so user can plot a point first then hit
@@ -310,6 +323,13 @@
 		// user knows where it will end up"): the sandbox shows the snapped
 		// ghost on hover even outside rounds — asking rounds always did
 		if (!asking && get(detStep) !== 6) {
+			if (hoverPt) {
+				hoverPt = null;
+				syncFx();
+			}
+			return;
+		}
+		if (asking && isGameUiTarget(e)) {
 			if (hoverPt) {
 				hoverPt = null;
 				syncFx();
@@ -515,6 +535,30 @@
 	// boundaries (entrances, camera, formula card), landing on exact matrices.
 	let scrubActive = false;
 	const SCRUB_ZONE = 520; // px of approach over which the morph plays
+
+	// fire 105: the PINNED story's morph writer. The old pipeline rode the
+	// rAF ticker twice (ScrollTrigger.progress -> scrub-tween render), so a
+	// starved renderer froze the square mid-station and snapped it forward on
+	// catch-up ticks. The scroll-path poll (rAF when alive, its 50ms timer
+	// fallback when not) now writes the window-mapped morph directly — the
+	// same "slide with the scroll" contract, no animation frames required.
+	let lastSpanWrite = null;
+	function updateSpanScrub() {
+		if (!pinsLive() || get(detGame).status !== "idle") {
+			lastSpanWrite = null;
+			return;
+		}
+		const s = spanScrub2D();
+		if (!s) {
+			lastSpanWrite = null;
+			return;
+		}
+		if (lastSpanWrite && lastSpanWrite.n === s.n && Math.abs(s.p - lastSpanWrite.p) < 0.002) {
+			return; // same station, unmoved progress — don't spam tween-killing writes
+		}
+		lastSpanWrite = { n: s.n, p: s.p };
+		detScrubTo(s.from, s.to, s.p);
+	}
 	function updateStoryScrub(current) {
 		const step = get(detStep);
 		if (
@@ -536,7 +580,23 @@
 		}
 		const top = el.getBoundingClientRect().top;
 		const center = window.innerHeight / 2;
-		const p = (center + SCRUB_ZONE - top) / SCRUB_ZONE;
+		// fire 105 (the section-jump teleport, the user: "it shows instantly a
+		// few steps ahead and then goes back"): the zone used to be a fixed
+		// 520px — DEEPER than the ~290-360px gaps between the det stations, so
+		// at every section switch the next station was already 30-90% inside
+		// the zone and this scrub jumped the entries straight toward the NEXT
+		// matrix in one frame (applyStep's own tween — later in the same poll
+		// — then pulled them back: the ahead-then-back glitch). Derive the
+		// zone from the LIVE gap to the station after next instead: p reads 0
+		// exactly at a switch and 1 at the next one, so the morph owns the
+		// travel BETWEEN text sections and is continuous across switches.
+		let zone = SCRUB_ZONE;
+		const elNext = document.getElementById(`det-st-${current + 2}`);
+		if (elNext) {
+			const gap = elNext.getBoundingClientRect().top - top;
+			if (gap > 150) zone = Math.min(SCRUB_ZONE, gap);
+		}
+		const p = (center + zone - top) / zone;
 		if (p > 0.001 && p < 0.999) {
 			scrubActive = true;
 			detScrubTo(STEP_MATRIX[current], STEP_MATRIX[current + 1], p);
@@ -901,7 +961,16 @@
 			runStepIn();
 			// fire 92: entering a span must NOT snap the morph to its end —
 			// the span's scrub tween plays it with the scroll (scrub: 1)
-			if (!inDetSpan()) setDetTarget(m, { duration: 1.4 });
+			// fire 105: an ADJACENT story step is the scroll scrub's continuum
+			// too (rect mode): the scrub's p is continuous across a switch —
+			// the old pair lands at 1 exactly as the new pair starts at 0 — so
+			// a time tween here would fight it and yank the shape back after
+			// every section switch (the "goes back" half of the teleport).
+			// Non-adjacent arrivals (fast-scroll jumps, story entry, try-it
+			// returns) still morph on the clock.
+			const adjacentStoryStep =
+				prev >= 1 && prev <= 5 && n >= 1 && n <= 5 && Math.abs(n - prev) === 1;
+			if (!inDetSpan() && !adjacentStoryStep) setDetTarget(m, { duration: 1.4 });
 		}
 	}
 
@@ -1326,6 +1395,16 @@
 		try {
 			updateApproach();
 		} catch (e) {}
+		// fire 105b (the fast-scroll leftover): a jump past the pin release
+		// leaves gsap's cached y on the column (up to 6500 = 5 holds) — the
+		// assert zeroes it; the ST hooks alone miss loads where no toggle or
+		// refresh fires after the jump. Poll-side enforcement self-heals.
+		try {
+			if (pinsLive()) {
+				assertDetReleased();
+				assertDetReadingShift();
+			}
+		} catch (e) {}
 		// fire 92 (the re-anchor): with the pins live the station triggers —
 		// not the DOM rects — are the story state; the pinned rects NEVER
 		// drive detStep (the fire-84 failure mode: the reflux parks them at
@@ -1371,10 +1450,24 @@
 		} else {
 			frozenMorphPolls = 0;
 		}
-		for (let n = 1; n <= 6; n++) {
-			const el = document.getElementById(`det-st-${n}`);
-			if (!el) continue;
-			if (el.getBoundingClientRect().top <= center) current = n;
+		// fire 105 (the section-jump teleport, root cause): this second rect
+		// loop used to run UNCONDITIONALLY and stomp the trigger-anchored
+		// current above. Under live pins the article is PINNED on and off
+		// around each span boundary — in-flow, the station rects sit only
+		// ~290px apart while the trigger windows are 1300px apart — so in
+		// every unpinned instant this loop computed a step or two AHEAD of
+		// the story (their tops still above the viewport center) and the
+		// trigger machinery then pulled the step back: the user's "it shows
+		// instantly a few steps ahead and then goes back". The fire-92
+		// contract (pinned rects NEVER drive detStep) is now actually
+		// enforced: under pins only triggerCurrent() + the try-it/footer
+		// rules below speak.
+		if (!pinsLive()) {
+			for (let n = 1; n <= 6; n++) {
+				const el = document.getElementById(`det-st-${n}`);
+				if (!el) continue;
+				if (el.getBoundingClientRect().top <= center) current = n;
+			}
 		}
 		// pin-spacer calibration varies between loads and can leave det-st-6
 		// short of the viewport center at max scroll — the try-it is the page's
@@ -1531,9 +1624,10 @@
 				current = 6;
 			}
 		}
-		// fire 50: the scroll scrub slides the square between stations — it
-		// runs BEFORE the discrete applyStep so a boundary crossing lands on
-		// the exact matrix first, then the entrances play over it
+		// fire 50/105: the morph writers, in order — the pinned-span scrub
+		// first (window math), then the rect-mode approach scrub; a boundary
+		// crossing lands on the exact matrix first, then the entrances play
+		updateSpanScrub();
 		updateStoryScrub(current);
 		// fire 92: with the pins live the triggers' toggleClass owns the glow
 		// (the original's exact mechanism); the manual toggle is rect-mode only
@@ -1594,7 +1688,6 @@
 	let lastRectTop = null;
 	let lastRectScroll = null;
 	let rectsFrozen = false;
-	let detWrapper = null;
 	let detDestroyed = false;
 	let detPollIv = null;
 	let detPollIvBackup = null;
@@ -1624,32 +1717,32 @@
 		window.removeEventListener("scroll", onScrollDetUpdate);
 		window.removeEventListener("scroll", scheduleScrubCatchup);
 		window.removeEventListener("resize", detUpdate);
+		window.removeEventListener("pointerdown", onCanvasPointerDown);
+		window.removeEventListener("pointermove", onCanvasPointerMove);
+		window.removeEventListener("pointerout", onWindowPointerOut);
 		ScrollTrigger.removeEventListener("refresh", onRefreshRepair);
 		if (scrubCatchup) clearTimeout(scrubCatchup);
 		if (exitDelay) clearTimeout(exitDelay);
-		if (detWrapper) {
-			detWrapper.removeEventListener("pointerdown", onCanvasPointerDown);
-			detWrapper.removeEventListener("pointermove", onCanvasPointerMove);
-			detWrapper.removeEventListener("pointerleave", onCanvasPointerLeave);
-		}
 		document.body.classList.remove("det-asking");
 		if (detPollIv) clearInterval(detPollIv);
 		if (detPollIvBackup) clearInterval(detPollIvBackup);
 	});
 
-	function attachWrapper(attempt = 0) {
-		if (detDestroyed || detWrapper) return;
-		const wrapper = document.getElementById("canvas-wrapper");
-		if (wrapper) {
-			detWrapper = wrapper;
-			wrapper.addEventListener("pointerdown", onCanvasPointerDown);
-			wrapper.addEventListener("pointermove", onCanvasPointerMove);
-			wrapper.addEventListener("pointerleave", onCanvasPointerLeave);
-		} else if (attempt < 10) {
-			// the wrapper is static DOM, but if the engine ever mounts before it
-			// exists, retry briefly instead of losing the games for the session
-			setTimeout(() => attachWrapper(attempt + 1), 500);
-		}
+	// fire 105: click-to-guess and the hover ghost are WINDOW-level — the old
+	// wrapper delegation lost every plot click to whatever painted above the
+	// canvas (the game card's own box, the guide's spotlight fuzz, the
+	// article's decorative SVGs; the lost-race variant silently killed the
+	// games for a session — RUN 30). The window never races mount timing, and
+	// isGameUiTarget keeps real controls interactive.
+	function attachGameInput() {
+		window.addEventListener("pointerdown", onCanvasPointerDown);
+		window.addEventListener("pointermove", onCanvasPointerMove);
+		window.addEventListener("pointerout", onWindowPointerOut);
+	}
+	// the window has no pointerleave; a pointerout whose relatedTarget died
+	// (left the document) is the leave signal for the hover ghost
+	function onWindowPointerOut(e) {
+		if (!e.relatedTarget) onCanvasPointerLeave();
 	}
 	function scheduleScrubCatchup() {
 		// the original's pin eases with scrub: 1 — the det sections' screen
@@ -1722,12 +1815,10 @@
 		window.addEventListener("scroll", scheduleScrubCatchup, { passive: true });
 		window.addEventListener("resize", detUpdate);
 		ScrollTrigger.addEventListener("refresh", onRefreshRepair);
-		// click-to-guess and the hover ghost are DELEGATED on #canvas-wrapper:
-		// attaching to the canvas itself races Threlte's canvas creation, and a
-		// lost race silently killed the prediction games for the whole session
-		// (found in RUN 30). The wrapper is resolved per-event inside the
-		// handlers; attachWrapper retries if it does not exist yet.
-		attachWrapper();
+		// click-to-guess and the hover ghost ride the window (see
+		// attachGameInput) — no element-resolution race, no occluder can
+		// swallow a plot click
+		attachGameInput();
 		// G-A page failsafe (RUN 48): when the WebGL canvas init throws, the
 		// abort in Svelte's mount flush also kills Index's own loading fade —
 		// the page stays bricked behind the "Loading..." overlay forever

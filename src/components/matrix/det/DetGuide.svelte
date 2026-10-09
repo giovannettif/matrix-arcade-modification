@@ -1,7 +1,7 @@
 <script>
 	import { onMount, onDestroy } from "svelte";
 	import { MousePointerClick, Gauge, Crosshair, BookOpen, ChevronDown, ChevronUp } from "lucide-svelte";
-	import { detGuideStep, detGuideCollapsed } from "$stores/det.js";
+	import { detGuideStep, detGuideCollapsed, detGame } from "$stores/det.js";
 	import { lastSpanEnd } from "$stores/detPins.js";
 
 	const beats = [
@@ -35,6 +35,12 @@
 	$: beat = step >= 0 && step < beats.length ? beats[step] : null;
 	$: last = step === beats.length - 1;
 	$: if (cardEl) place(beat);
+	// fire 105 (the "can't predict" report): while a prediction round is
+	// asking, the spotlight fuzz stands down — its whole viewport path used
+	// to keep blocking canvas clicks mid-round (each plot click just advanced
+	// the tour), so rounds could not be played until the tour happened to
+	// finish. The dim/blur look stays; only the interception is released.
+	$: roundLive = $detGame.status === "asking";
 
 	let cardEl;
 	let arrowSide = "left";
@@ -318,13 +324,21 @@
 	     CSS mask ever fails we lose the blur, never the whole screen. -->
 	<div
 		class="glass"
+		class:round-live={roundLive}
 		on:wheel|preventDefault={() => {}}
 		style:mask-image={maskImage}
 		style:-webkit-mask-image={maskImage}
 		aria-hidden="true"
 	/>
-	<svg class="spotlight" aria-hidden="true" on:wheel|preventDefault={() => {}}>
-		<path d={spotPath} fill-rule="evenodd" on:click={() => (last ? finish() : next())} />
+	<svg class="spotlight" class:round-live={roundLive} aria-hidden="true" on:wheel|preventDefault={() => {}}>
+		<path
+			d={spotPath}
+			fill-rule="evenodd"
+			on:click={() => {
+				if (roundLive) return;
+				last ? finish() : next();
+			}}
+		/>
 	</svg>
 {/if}
 
@@ -468,6 +482,11 @@
 		fill: transparent; /* fire 79 (I2): the glass layer owns the tint now —
 		                      this path only blocks clicks */
 		pointer-events: auto;
+	}
+	/* fire 105: mid-round the fuzz keeps its look but stops intercepting —
+	   the canvas must take the plot clicks (see the roundLive note above) */
+	.spotlight.round-live path {
+		pointer-events: none;
 	}
 	/* fire 79 (I2): the frosted-glass blackout, cut by the shared hole mask */
 	.glass {
