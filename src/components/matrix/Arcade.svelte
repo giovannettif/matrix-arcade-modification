@@ -47,7 +47,7 @@
 	} from "$stores";
 	// CS375: det story step — Maxwell is hidden while the determinant section plays
 	import { detStep } from "$stores/det.js";
-	import { createDetPins } from "$stores/detPins.js";
+	import { retryCreateDetPins } from "$stores/detPins.js";
 	// fire 65 (FIX-C): the 3D det chapter's step — every "hide when the det
 	// section owns the canvas" gate below keyed only on the 2D detStep, so
 	// the original's content (near-black backdrop planes, cat, narrative
@@ -2245,8 +2245,16 @@
 		// st-1..13, the proven creation moment. The health guard in detPins.js
 		// (collapse OR scroll-flow detach) falls back to rect mode if anything
 		// still corrupts.
+		// fire 110: the batch call routes through the docH SETTLE gate now.
+		// The story pins' function windows measure station crosses at creation
+		// (measured live: det-st-1's cross read 14630 mid-cascade vs its true
+		// 32392 once the original's 19000 of spacing had applied) and a
+		// refresh-robust frozen measurement engages the pin at the wrong
+		// scroll from the load. The polls re-attempt every 300ms, so this
+		// call simply becomes the retry loop's first attempt; creation lands
+		// ~1s later on the settled layout.
 		try {
-			createDetPins();
+			retryCreateDetPins();
 		} catch (err) {
 			console.error("[det] createDetPins threw:", err);
 		}

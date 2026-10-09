@@ -497,13 +497,5 @@
 	<div class="h-[4700px]" />
 </div>
 
-<!-- fire 107: the 3D station pins run with pinSpacing:false (both families
-     sharing one spacer let each refresh wipe the other's padding — docH
-     shrank 6500px mid-session and clipped the 3D try-it against the footer).
-     This sibling runway is the 3D family's scroll room instead: five holds
-     x 1300px that sit BELOW the pinned column, consumed while the column is
-     held fixed, with the footer after it. -->
-<div class="h-[6500px]" />
-
 <!-- TODO: Composition of matrices -->
 

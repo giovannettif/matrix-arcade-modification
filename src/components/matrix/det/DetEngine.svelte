@@ -1371,13 +1371,19 @@
 		// the viewport (Scene hands the wheel to the page scroll there; see
 		// detRegionNear in $stores/det.js). Runs before every early return so
 		// the flag never freezes stale.
+		// fire 109: the gate now starts ~2.5 viewports BEFORE the column — the
+		// stretch between section-2's end (where the original's canvas zoom
+		// zone ends) and the column entering the viewport was a wheel dead
+		// zone: camera-controls ate every wheel over the canvas while the page
+		// hadn't started scrolling the det region yet (measured: the sweep
+		// stuck at 29006/29832 repeatedly).
 		{
 			const col = document.getElementById("det-article");
 			if (!desktopLayout()) {
 				detRegionNear.set(false);
 			} else if (col) {
 				const r = col.getBoundingClientRect();
-				detRegionNear.set(r.top < window.innerHeight && r.bottom > 0);
+				detRegionNear.set(r.top < window.innerHeight * 2.5 && r.bottom > -window.innerHeight);
 			} else {
 				detRegionNear.set(false);
 			}

@@ -160,14 +160,27 @@ export function lockDetSpacerHeights() {
 	// scroll into the shrunken document — the user's "teleports me back to
 	// the start of the determinant section". Clear-then-measure re-recorded
 	// the collapsed box as the new truth (the ratchet), baking the clamp in.
-	// While pins own the page the lock only ever holds or raises; legitimate
-	// shrink paths (teardowns) clear the locks first (killDetPins). With the
-	// 3D family at pinSpacing:false the det spacer's size no longer changes
-	// while pins are live, so a too-tall lock has no live producer left.
+	// fire 108: the story pins are ONE continuous trigger per family now, so
+	// the lock is additionally CAPPED at the document's sane extent (the
+	// footer's bottom + two viewports) — a lock recorded during a transient
+	// tall state can never strand empty scroll past the end of the page (the
+	// user's "sometimes goes past the end" report).
+	// fire 109: measure the LAYOUT height (offsetHeight), never the visual
+	// rect — during holds ST visually shifts the spacer (the multi-pin
+	// `top` offset chain), and a rect measurement recorded that shifted
+	// box (measured live: the lock ratcheted to 23712 vs the natural
+	// 20868), stranding dead scroll past the end of the page — the user's
+	// "sometimes goes past the end" report.
 	for (const s of spacers) s.style.minHeight = "";
+	const footerCapEl = document.querySelector("footer");
+	const docCap = footerCapEl
+		? footerCapEl.getBoundingClientRect().bottom + window.scrollY + window.innerHeight * 2
+		: Infinity;
 	for (const s of spacers) {
 		const prev = parseFloat(s.dataset.detMinLock || "0");
-		const h = Math.max(prev, s.getBoundingClientRect().height);
+		const spacerTop = s.getBoundingClientRect().top + window.scrollY;
+		const room = Math.max(0, docCap - spacerTop);
+		const h = Math.min(Math.max(prev, s.offsetHeight), room);
 		if (h > 0) {
 			s.dataset.detMinLock = String(Math.round(h));
 			s.style.minHeight = `${Math.round(h)}px`;
@@ -207,6 +220,15 @@ export function killDetPins() {
 	for (const tl of stationTls3D) {
 		if (tl) tl.kill();
 	}
+	// fire 110: the story pins are standalone triggers
+	if (detPinTrigger2D) {
+		detPinTrigger2D.kill();
+		detPinTrigger2D = null;
+	}
+	if (detPinTrigger3D) {
+		detPinTrigger3D.kill();
+		detPinTrigger3D = null;
+	}
 	stationTls2D = [];
 	stationTriggers2D = [];
 	stationTls3D = [];
@@ -233,6 +255,11 @@ export function kill3DSpans() {
 	}
 	stationTls3D = [];
 	stationTriggers3D = [];
+	// fire 110: the 3D story pin goes with its stations
+	if (detPinTrigger3D) {
+		detPinTrigger3D.kill();
+		detPinTrigger3D = null;
+	}
 	spans3Disabled = true;
 	// fire 106 rev 2: the 3D spacing is about to be removed — unmin the
 	// spacers or the stale lock would hold the document 6500px too tall and
@@ -296,30 +323,49 @@ export function retryCreateDetPins() {
 // creation and around every refresh/toggle so both the baked left and the
 // live transform stay at the reading offset. The step-6 expanded sandbox
 // is the one state that wants the column clear, so it stays exempt.
+// fire 109 (VERBATIM REVERT): this is the fire-103 assert adapted to
+// TRANSFORM pinning. With no pinType override, ST pins the column by
+// writing the pin offset into its transform (measured on the original
+// mid-hold: translate3d(-65ch, 14000px, 0) — the reading shift AND the
+// pin offset share one transform, and the element is NEVER position
+// fixed). Therefore: x is re-asserted at -65ch (ST preserves the x
+// component — the original proves it), but y IS the pin offset while a
+// station span holds — zeroing it mid-hold would throw the column back
+// to its flow slot (the fire-101-era "text keeps moving" class). y is
+// only zeroed OUTSIDE every span, which is also the fire-105b cleanup
+// (a stale hold-multiple y surviving past the release, rendering the
+// column over the footer / past the page end).
 export function assertDetReadingShift() {
 	const el = document.getElementById("det-article");
 	if (!el) return;
-	if (get(detStep) === 6 && get(detTryExpanded)) return;
-	// fire 106: during a fixed hold ScrollTrigger owns top/left (the reading
-	// offset lives in `left`) — but a stale y translate still VISUALLY shifts
-	// the whole pinned column (the fire-105b measurement showed hold-multiple
-	// y surviving; the old early-return here protected it). Zero the
-	// transform's y only — top/left stay ST's.
-	if (getComputedStyle(el).position === "fixed") {
-		gsap.set(el, { y: 0 });
+	if (get(detStep) === 6 && get(detTryExpanded)) {
+		gsap.set(el, { x: 0 });
 		return;
 	}
-	// fire 105b (the fast-scroll leftover, the user: "scrolling to the bottom
-	// too fast causes the det part to go off the page past the ending"):
-	// jumping past the release leaves a stale y-translate in gsap's cache on
-	// this element (measured: a multiple of the 1300px holds — 5200, 6500 —
-	// the fire-101 transform-pin signature at the new span length), and the
-	// column then renders that far below its flow slot: over the footer /
-	// past the document end, forever (it survives every later refresh). Out
-	// of a fixed hold the column's only intended transform is the reading
-	// shift, so y is zeroed here on every assert.
-	gsap.set(el, { x: "-65ch", y: 0 });
+	const inStory = inDetSpan() || inDetSpan3();
+	if (inStory) {
+		staleYpolls = 0;
+		gsap.set(el, { x: "-65ch" });
+		return;
+	}
+	// x is ours; y is ST's pin offset — NEVER write it while a release might
+	// still be in ST's ticker lag (measured: an imperative y-zero inside the
+	// span4->5 gap desynced ST's cached transform and the scroll snapped
+	// -7345). Outside every span, a non-zero y is only cleaned after it has
+	// survived two consecutive polls (~600ms) — ST's own revert lands within
+	// one frame, so genuine stale translates (fire 105b) still die.
+	gsap.set(el, { x: "-65ch" });
+	const y = gsap.getProperty(el, "y");
+	if (Math.abs(y) > 50) {
+		if (++staleYpolls >= 2) {
+			staleYpolls = 0;
+			gsap.set(el, { y: 0 });
+		}
+	} else {
+		staleYpolls = 0;
+	}
 }
+let staleYpolls = 0;
 
 // fire 105b (the stuck release): after an instant jump past every span the
 // triggers can ALL read inactive (progress 1, srcScroll tracking) while the
@@ -327,8 +373,12 @@ export function assertDetReadingShift() {
 // translate + the sizing ST froze at pin time) for the rest of the session —
 // measured live at the try-it band. ScrollTrigger's own view is the
 // authority: when no hold is live and the scroll is past the last span end,
-// restore the flow state, then the reading shift. Conservative on purpose:
-// any live isActive (even a stale one) defers to ST's ticker.
+// restore the flow state, then the reading shift.
+// fire 108 (the user's screenshot: the 3D story text held over the footer):
+// a DISCONNECTED trigger's isActive can stick true forever (its ticker
+// stopped updating), deadlocking this heal against its own guard. A trigger
+// whose window does not contain the live scrollY is not holding anything —
+// only a genuinely-containing hold defers the restore now.
 export function assertDetReleased() {
 	const el = document.getElementById("det-article");
 	if (!el) return;
@@ -337,7 +387,7 @@ export function assertDetReleased() {
 	const ends = [lastSpanEnd(), lastSpanEnd3()].filter((e) => e !== null);
 	if (!ends.length || y <= Math.max(...ends) + 200) return;
 	for (const st of [...stationTriggers2D, ...stationTriggers3D]) {
-		if (st && st.isActive) return;
+		if (st && st.isActive && y >= st.start && y <= st.end) return;
 	}
 	gsap.set(el, {
 		clearProps: "position,top,left,bottom,width,maxWidth,maxHeight,height,margin"
@@ -377,52 +427,34 @@ export function createDetPins() {
 	let created2D = !!secDet;
 	let created3D = !!sec3 && !spans3Disabled;
 	// the reading shift must be in place BEFORE the triggers' first refresh —
-	// that refresh is what bakes the fixed pin's `left`
+	// that refresh is what bakes the transform pin's state
 	assertDetReadingShift();
 	if (created2D) {
+		create2DStoryPin();
 		for (let n = 1; n <= 5; n++) {
 			const el = document.getElementById(`det-st-${n}`);
 			if (!el) continue;
-			// fire 105: the timeline is kept for the PIN + toggleClass only —
-			// the morph write moved to the engines' scroll-path poll via
-			// spanScrub2D() (window math, starvation-proof; the old scrub-tween
-			// render froze on a starved rAF and snapped forward on catch-up)
-			const tl = gsap.timeline({
-				scrollTrigger: {
-					trigger: el,
-					start: "center center",
-					// the original's scrollUnit — ~1000px of pinned hold per station
-					// fire 104 (the user: the animations get cut before the text switches):
-					// 1300px of hold per station — the beat animations need the room
-					end: "+=1300",
-					// fire 100: OUR container, not #article — 23 pins of one element
-					// corrupted the page's calibration in every timing (81/92/93);
-					// distinct pinned elements are the supported pattern
-					pin: "#det-article",
-					pinnedContainer: "#det-article",
-					// fire 101 (the footer-overlap finding): ST was auto-picking
-					// transform-pinning and left a constant translateY 5000 on the
-					// container after span 5 released — the held text floated over
-					// the footer. The sibling chain has no transformed ancestors,
-					// so force the stable fixed pin type.
-					pinType: "fixed",
-					// fire 100 iterate: #det-article is now a SIBLING of #article (its own
-					// column) — no transformed ancestor, so the default fixed pinType applies
-					pinSpacing: true,
-					scrub: 1,
-					fastScrollEnd: true,
-					toggleClass: "active",
-					invalidateOnRefresh: true,
-					// fire 103: keep the column at its reading offset through the
-					// refresh's revert/re-capture cycle (both det families pin the
-					// same element, so the 3D config repeats the hooks verbatim)
-					onRefreshInit: assertDetReadingShift,
-					onRefresh: assertDetReadingShift,
-					onToggle: assertDetReadingShift
-				}
+			// fire 110 (the oscillation kill): the stations are WINDOW-ONLY
+			// triggers — the column is pinned ONCE per story. The verbatim
+			// per-station pins (fire 109) reproduced an oscillation the single
+			// family never hits: with two families x five pins sharing one
+			// spacer, ST's scroll-position-dependent spacing re-sum recalc
+			// shrinks the doc on every refresh (measured -7345 + repeated
+			// -864 snaps, docH 60034 -> 56270). One pin per family = one
+			// spacing contributor = the measured-stable structure, with the
+			// stations tiling the pin's span for the highlight/morph windows.
+			const st = ScrollTrigger.create({
+				trigger: el,
+				start: () => storyWindow2D(n, 0),
+				end: () => storyWindow2D(n, 1300),
+				pinnedContainer: "#det-article",
+				fastScrollEnd: true,
+				toggleClass: "active",
+				invalidateOnRefresh: true,
+				onToggle: assertDetReadingShift
 			});
-			stationTriggers2D.push(tl.scrollTrigger);
-			stationTls2D.push(tl);
+			stationTriggers2D.push(st);
+			stationTls2D.push(null);
 		}
 	}
 	if (created3D) {
@@ -471,13 +503,71 @@ export function createDetPins() {
 	watchHealth(document.documentElement.scrollHeight);
 }
 
-// fire 107: the 3D family's five pin+scrub spans, extracted so the stale-span
-// watchdog can RE-CREATE them (recreate3DSpans) instead of killing the family
-// for the session. pinSpacing is false (the runway div owns the scroll room),
-// so re-creation touches no spacer geometry and needs no refresh — the new
-// triggers measure their windows against the CURRENT layout, which is what
-// heals the frozen-shallow-window failure.
+// fire 110: ONE continuous pin per story — the whole chapter freezes the
+// column with a single trigger (det-st-1's cross -> det-st-5's cross +
+// 1300), and the stations tile that span as window-only triggers. One
+// spacing contributor per family: no scroll-position-dependent spacing
+// re-sums, no oscillation, no mid-story releases. The reading shift and
+// the pin offset share the column's transform (transform pinning — the
+// element is never position fixed, and ST preserves the x component).
+let detPinTrigger2D = null;
+let detPinTrigger3D = null;
+// a station element's "center crosses viewport center" scroll position —
+// measured inside ST's refresh (pins reverted, flow rects truthful)
+function storyCross(sel) {
+	const el = document.getElementById(sel);
+	if (!el) return 0;
+	const r = el.getBoundingClientRect();
+	return r.top + window.scrollY + r.height / 2 - window.innerHeight / 2;
+}
+// the 2D family's configured duration — the shift the 3D story's windows
+// must carry (the 3D crosses are raw flow positions; the 2D story's
+// consumed scroll room sits between them and the 3D chapter)
+function story2DDuration() {
+	return detPinTrigger2D ? detPinTrigger2D.end - detPinTrigger2D.start : 0;
+}
+function storyWindow2D(n, offset) {
+	if (!detPinTrigger2D) return 0;
+	return detPinTrigger2D.start + (n - 1) * 1300 + offset;
+}
+function storyWindow3D(n, offset) {
+	if (!detPinTrigger3D) return 0;
+	return detPinTrigger3D.start + (n - 1) * 1300 + offset;
+}
+function create2DStoryPin() {
+	if (detPinTrigger2D) return;
+	detPinTrigger2D = ScrollTrigger.create({
+		trigger: "#det-st-1",
+		start: () => storyCross("det-st-1"),
+		end: () => storyCross("det-st-1") + 5 * 1300,
+		pin: "#det-article",
+		pinnedContainer: "#det-article",
+		pinSpacing: true,
+		fastScrollEnd: true,
+		invalidateOnRefresh: true,
+		onRefresh: assertDetReadingShift,
+		onToggle: assertDetReadingShift
+	});
+}
+
+// fire 110: the 3D story's ONE continuous pin + window-only stations (the
+// 2D twin — see create2DStoryPin). Re-creation measures fresh windows
+// against the CURRENT layout, healing the frozen-shallow-window failure.
 function create3DSpanTriggers() {
+	if (!detPinTrigger3D) {
+		detPinTrigger3D = ScrollTrigger.create({
+			trigger: "#det3d-st-1",
+			start: () => storyCross("det3d-st-1") + story2DDuration(),
+			end: () => storyCross("det3d-st-1") + 5 * 1300 + story2DDuration(),
+			pin: "#det-article",
+			pinnedContainer: "#det-article",
+			pinSpacing: true,
+			fastScrollEnd: true,
+			invalidateOnRefresh: true,
+			onRefresh: assertDetReadingShift,
+			onToggle: assertDetReadingShift
+		});
+	}
 	for (let n = 1; n <= 5; n++) {
 		const el = document.getElementById(`det3d-st-${n}`);
 		if (!el) continue;
@@ -487,39 +577,13 @@ function create3DSpanTriggers() {
 		const tl = gsap.timeline({
 			scrollTrigger: {
 				trigger: el,
-				start: "center center",
-				// fire 104 (the user: the animations get cut before the text switches):
-				// 1300px of hold per station — the beat animations need the room
-				end: "+=1300",
-				// fire 100: OUR container, not #article — 23 pins of one element
-				// corrupted the page's calibration in every timing (81/92/93);
-				// distinct pinned elements are the supported pattern
-				pin: "#det-article",
+				start: () => storyWindow3D(n, 0),
+				end: () => storyWindow3D(n, 1300),
 				pinnedContainer: "#det-article",
-				// fire 101 (the footer-overlap finding): ST was auto-picking
-				// transform-pinning and left a constant translateY 5000 on the
-				// container after span 5 released — the held text floated over
-				// the footer. The sibling chain has no transformed ancestors,
-				// so force the stable fixed pin type.
-				pinType: "fixed",
-				// fire 100 iterate: #det-article is now a SIBLING of #article (its own
-				// column) — no transformed ancestor, so the default fixed pinType applies
-				// fire 107 (the docH shrink): both families' spacing rode ONE shared
-				// spacer, and each family's refresh re-applied the pad-bottom as its
-				// OWN total — the other family's 6500px vanished mid-session (measured
-				// live: docH 60034 -> 53246 while the user scrolled), clipping the 3D
-				// try-it against the footer rule. Only the 2D family uses ST spacing
-				// now; the 3D family's scroll room is the explicit runway div that
-				// follows #det-article (Article.svelte).
-				pinSpacing: false,
 				scrub: 1,
 				fastScrollEnd: true,
 				toggleClass: "active",
-				invalidateOnRefresh: true,
-				// fire 103: the 2D twin's hooks — same element, same fix
-				onRefreshInit: assertDetReadingShift,
-				onRefresh: assertDetReadingShift,
-				onToggle: assertDetReadingShift
+				invalidateOnRefresh: true
 			}
 		});
 		tl.to(proxy, {
@@ -553,6 +617,18 @@ export function recreate3DSpans() {
 	}
 	stationTls3D = [];
 	stationTriggers3D = [];
+	// the story pin's windows go stale with the stations' — recreate it too
+	if (detPinTrigger3D) {
+		detPinTrigger3D.kill();
+		detPinTrigger3D = null;
+	}
+	// fire 110: the column may still carry the previous pin's transform y
+	// (the assert's grace period leaves it for ST's ticker) — storyCross
+	// measures rects, and a stale +6500 offset poisons every recreated
+	// window (measured: station windows inflated a full hold deep). Outside
+	// a hold the y is garbage by definition — clear before measuring.
+	const colEl = document.getElementById("det-article");
+	if (colEl) gsap.set(colEl, { y: 0 });
 	create3DSpanTriggers();
 	if (get(detPinsLive)) lockDetSpacerHeights();
 }

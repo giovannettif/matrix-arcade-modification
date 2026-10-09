@@ -42,6 +42,7 @@
 	// fire 93: canonical in $stores/detPins.js (the pin scrubs read the same objects)
 import {
 	STEP3_MATRIX,
+	detPinsLive,
 	pinsLive as stationPinsLive3,
 	inDetSpan3 as stationInSpan3,
 	triggerCurrent3 as stationTriggerCurrent3,
@@ -50,6 +51,7 @@ import {
 	retryCreateDetPins,
 	kill3DSpans,
 	recreate3DSpans,
+	spans3Dead,
 	detPinsSpans3,
 	pins3Live as pins3LiveRaw,
 	assertDetReadingShift,
@@ -398,17 +400,32 @@ import {
 		// inside a fixed hold is what produced the dead windows), and NaN ends
 		// count as out-of-band. Sanity band = the engine's own footer-relative
 		// anchorOk tolerance (release before the footer, but not absurdly deep).
+		// fire 109 (the out-of-order 3D world, measured at y 40900 with
+		// det3dStep 5 during the 2D try-it): the heal was gated on
+		// stationPinsLive3() — but a DEFERRED 3D family (skipped at creation
+		// while the column was pinned) leaves stationTriggers3D empty,
+		// pins3Live false forever, and the heal deadlocks against its own
+		// guard. The 3D story then falls to the rect machine, whose frozen
+		// in-column rects read every station "past center" (all negative tops
+		// inside the fixed hold) — step 5 engaged three thousand pixels early.
+		// Gate on detPinsLive (the 2D family's liveness) instead, and treat a
+		// never-created family (null end) as healable.
 		try {
-			if (stationPinsLive3() && bandHealAttempts3 < 4) {
+			if (get(detPinsLive) && !spans3Dead() && bandHealAttempts3 < 4) {
 				const lastEnd = lastSpanEnd3();
 				const footerEl = document.querySelector("footer");
 				const colNow = document.getElementById("det-article");
 				const colPinned = colNow && getComputedStyle(colNow).position === "fixed";
 				if (!colPinned && footerEl) {
 					const ft = footerEl.getBoundingClientRect().top + window.scrollY;
-					if (!Number.isFinite(lastEnd) || lastEnd > ft - 200 || lastEnd < ft - 8000) {
+					const outOfBand =
+						lastEnd === null ||
+						!Number.isFinite(lastEnd) ||
+						lastEnd > ft - 200 ||
+						lastEnd < ft - 8000;
+					if (outOfBand) {
 						bandHealAttempts3++;
-						console.error("[det3] the 3D span windows are outside the footer-relative sanity band — recreating them against the settled layout");
+						console.error("[det3] the 3D span windows are missing or outside the footer-relative sanity band — recreating them against the settled layout");
 						recreate3DSpans();
 					}
 				}
@@ -547,15 +564,31 @@ import {
 			// held station sits at viewport center, so this rect cross-check
 			// passes exactly when the window is telling the truth and blocks
 			// it exactly when the window ran ahead of the layout.
+			// fire 110 (the 3D world regressing to station 1 mid-chapter, the
+			// user's "3D is quite glitched"): the rect cross-checks read the
+			// VISUAL rects, which include the column's transform pin offset
+			// (translate y up to +6500 while a 3D hold is live) — the held
+			// stations' visual tops sit thousands of px BELOW center, the
+			// check decided "not arrived", zeroed the step mid-hold, and the
+			// step flap reset the 3D world to station 1's identity (the
+			// identity HUD + top-down camera regression). The flow-relative
+			// top (visual minus the pin's transform offset) is what "arrived"
+			// means under transform pinning.
+			const colPinY = (() => {
+				const colEl0 = document.getElementById("det-article");
+				if (!colEl0) return 0;
+				const y = gsap.getProperty(colEl0, "y");
+				return typeof y === "number" ? y : 0;
+			})();
 			const st1Arrival = document.getElementById("det3d-st-1");
 			if (current >= 1 && current <= 5 && st1Arrival) {
-				const st1Top = st1Arrival.getBoundingClientRect().top;
+				const st1Top = st1Arrival.getBoundingClientRect().top - colPinY;
 				if (st1Top > center + window.innerHeight * 0.6) current = 0;
 			}
 			if (current === 6) {
 				const st6Arrival = document.getElementById("det3d-st-6");
 				if (st6Arrival) {
-					const st6Top = st6Arrival.getBoundingClientRect().top;
+					const st6Top = st6Arrival.getBoundingClientRect().top - colPinY;
 					if (st6Top > center + window.innerHeight * 1.2) current = 0;
 				}
 			}
