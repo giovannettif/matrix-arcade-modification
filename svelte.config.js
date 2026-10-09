@@ -11,10 +11,18 @@ const preprocess = sveltePreprocess({
 	}
 });
 
+import dev from "$app/environment";
+
 const config = {
 	preprocess: sequence([preprocess, vitePreprocess(), preprocessMeltUI()]),
 	kit: {
-		adapter: adapterStatic()
+		adapter: adapterStatic(),
+		// fire 104: GitHub Pages serves the site under /matrix-arcade-modification/
+		// — all asset and route URLs are built from this base. Dev stays at the
+		// root so localhost:5174 is unchanged.
+		paths: {
+			base: dev ? "" : "/matrix-arcade-modification"
+		}
 	},
 	vitePlugin: {
 		// experimental: {
